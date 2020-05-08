@@ -1,0 +1,36 @@
+{
+    "name": "populous/php-wss",
+    "type": "library",
+    "description": "packages for php-wss websocket server in populous",
+    "keywords": ["websocket","wss","populous","ppt"],
+    "homepage": "https://test2.populous.world",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Remi Besnard",
+            "email": "bluesven869@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "arthurkushman/php-wss": "^1.6",
+        "php": ">=7.1",
+        "ext-pcntl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "PopulousWSS\\": "src",
+            "PopulousWSSTEST\\": "tests"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PopulousWSS\\": "src",
+            "PopulousWSSTEST\\": "tests"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^7",
+        "monolog/monolog": "^1.24"
+    }
+}
