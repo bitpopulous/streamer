@@ -1,3 +1,3 @@
-# php-wss
+# populousworld wss-server package
 
-test package
+This is a websocket package for populusworld wss-werver package.
