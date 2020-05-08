@@ -412,9 +412,9 @@ class Sell extends Trade
         $sell_qty = $amount;
 
         if ($this->_safe_math_condition_check("$sell_qty > $available_balance")) {
-            $this->setFailureReasonCode('INSUFFICIENT_BALANCE');
-            $this->setStatusAndMessage('NOT_OK', 'Insufficient balance.');
-            return false;
+            $data['isSuccess'] = false;
+            $data['message'] = 'Insufficient balance.';
+            return $data;
         }
 
         $remaining_qty = $sell_qty;

@@ -40,7 +40,7 @@ class ServerBaseHandler extends WebSocket
         ]);
 
         $this->CI->load->library([
-            'convertdata',
+            'ConvertData',
         ]);
     }
 
