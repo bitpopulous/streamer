@@ -276,7 +276,7 @@ class PrivateEvent extends PrivateChannel
             $last_three_trades_query = $this->CI->db->query($sql_trade);
 
             $coin_details = [
-                'coin_symbol' => $pair->currency_symbol,
+                // 'coin_symbol' => $pair->currency_symbol,
                 'symbol' => $pair->symbol,
                 'coinpair_id' => $pair->id,
                 'name' => $pair->name,
