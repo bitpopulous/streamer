@@ -38,17 +38,17 @@ class PublicEvent extends PublicChannel
     public function _event_coinpair_update(int $coin_id)
     {
         $channels = [];
-        $coinpair_symbol = strtolower($this->CI->cryptocoin_model->getCoinSymbolOfCoinpairId($coin_id));
+        $coin_symbol = strtolower($this->CI->WsServer_model->get_coin_symbol_by_coin_id($coin_id));
 
-        $market_channel = $this->CI->channels_model->getMarketGlobalChannel($coinpair_symbol);
-        $cryptoRatesChannel = $this->CI->channels_model->getCryptoRateChannel();
+        $market_channel = $this->CI->WsServer_model->get_market_global_channel($coin_symbol);
+        $crypto_rate_channel = $this->CI->WsServer_model->get_crypto_rate_channel();
 
         $channels[$market_channel] = [
             $this->_prepare_order_book($coin_id),
             $this->_prepare_trade($coin_id),
         ];
 
-        $channels[$cryptoRatesChannel] = [
+        $channels[$crypto_rate_channel] = [
             $this->_prepare_last_price($coin_id),
         ];
 
@@ -61,8 +61,8 @@ class PublicEvent extends PublicChannel
 
         if ($tce) {
 
-            $coinpair_symbol = $this->CI->cryptocoin_model->getCoinSymbolOfCoinpairId($tce['data']['coinpair_id']);
-            $market_channel = $this->CI->channels_model->getMarketGlobalChannel($coinpair_symbol);
+            $coin_symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($tce['data']['coinpair_id']);
+            $market_channel = $this->CI->WsServer_model->get_market_global_channel($coin_symbol);
 
             $channels = [];
             $channels[$market_channel] = [];
@@ -96,27 +96,17 @@ class PublicEvent extends PublicChannel
 
     private function _prepare_order_book($coin_id)
     {
-        $data = $this->CI->biding_model->getBuySellOrders($coin_id);
-
-        $buy_orders = $this->CI->convertdata->convertDataArray($data['buy_orders'], ['bid_price:1', 'total_qty:0'], $coin_id);
-        $sell_orders = $this->CI->convertdata->convertDataArray($data['sell_orders'], ['bid_price:1', 'total_qty:0'], $coin_id);
-
         return [
             'event' => 'orderbook',
-            'data' => [
-                'buy_orders' => $buy_orders,
-                'sell_orders' => $sell_orders,
-            ],
+            'data' => $this->CI->WsServer_model->get_orders($coin_id)
         ];
     }
 
     private function _prepare_trade($coin_id)
     {
-        $tradings = $this->CI->bidinglog_model->tradeHistoryByPairId($coin_id, 20);
-
         return [
             'event' => 'trade-history',
-            'data' => $this->CI->convertdata->convertDataArray($tradings, ['bid_price:1', 'complete_qty:0'], $coin_id),
+            'data' => $this->CI->WsServer_model->get_trades_history($coin_id, 20),
         ];
     }
 
@@ -125,15 +115,15 @@ class PublicEvent extends PublicChannel
         return [
             'event' => 'price-change',
             'data' => [
-                'current_price' => $this->CI->bidinglog_model->getLastSuccessTradePriceLog($coin_id),
-                'previous_price' => $this->CI->bidinglog_model->getPreviousSuccessTradePriceLog($coin_id),
+                'current_price' => $this->CI->WsServer_model->get_last_price_from_coin_id($coin_id),
+                'previous_price' => $this->CI->WsServer_model->get_previous_price_from_coin_id($coin_id),
             ],
         ];
     }
 
     private function _prepare_trade_create($log_id)
     {
-        $biding_log = $this->CI->bidinglog_model->getLogById($log_id);
+        $biding_log = $this->CI->WsServer_model->get_biding_log($log_id);
 
         if ($biding_log) {
 
@@ -155,40 +145,15 @@ class PublicEvent extends PublicChannel
 
     public function _prepare_exchange_init_data($coin_id)
     {
-        /**********************
-         * Get Trade History  *
-         **********************/
-        $_trades = $this->CI->bidinglog_model->tradeHistoryByPairId($coin_id, 60);
-        $trades = $this->CI->convertdata->convertDataArray($_trades, ['bid_price:1', 'complete_qty:0'], $coin_id);
-        
-        /**********************
-         * Get Coin History   *
-         **********************/
-        $coins = $this->CI->db->select('*')
-            ->from('dbt_coinhistory')
-            ->where('coinpair_id', $coin_id)
-            ->order_by('date', 'desc')
-            ->limit(20)
-            ->get()
-            ->row();
-        if ($coins == null) {
-            $coins = [];
-        }
-        
-        /**********************
-         * Get Order History  *
-         **********************/
-        $data = $this->CI->biding_model->getBuySellOrders($coin_id, 40);
-        $b_orders = $this->CI->convertdata->convertDataArray($data['buy_orders'], ['bid_price:1', 'total_qty:0'], $coin_id);
-        $s_orders = $this->CI->convertdata->convertDataArray($data['sell_orders'], ['bid_price:1', 'total_qty:0'], $coin_id);
+        $orders = $this->CI->WsServer_model->get_orders($coin_id, 40);
         
         return [
             'coinpairs_24h_summary' => $this->_coinpairs_24h_summary(),
-            'market_pairs' => $this->_prepare_market_pairs(),
-            'trade_history' => $trades,
-            'coin_history' => $coins,
-            'buy_orders' => $b_orders,
-            'sell_orders' => $s_orders,
+            'market_pairs' => $this->CI->WsServer_model->get_market_pairs(),
+            'trade_history' => $this->CI->WsServer_model->get_trades_history($coin_id, 60),
+            'coin_history' => $this->CI->WsServer_model->get_coins_history($coin_id, 20),
+            'buy_orders' => $orders['buy_orders'],
+            'sell_orders' => $orders['sell_orders'],
         ];
     }
 
@@ -277,84 +242,5 @@ class PublicEvent extends PublicChannel
             $data[$id]['volume_change_percent'] = $volume_change_percent;
         }
         return $data;
-    }
-    
-    private function _prepare_market_pairs()
-    {
-        $all_coin_pairs = $this->CI->web_model->coinPairs();
-        $all_coin_pairs_summary = [];
-
-        foreach ($all_coin_pairs as $pair) {
-            $sql = "
-                SELECT * FROM `dbt_coinhistory`
-                INNER JOIN
-                    (SELECT `coinpair_id`, MAX(`id`) AS maxid FROM `dbt_coinhistory`
-                     WHERE dbt_coinhistory.`coinpair_id` = '$pair->id' GROUP BY `coinpair_id`) as topid
-                ON dbt_coinhistory.`coinpair_id` = topid.`coinpair_id` AND dbt_coinhistory.`id` = topid.`maxid`
-            ";
-            $summary_query = $this->CI->db->query($sql);
-
-            $sql_trade = "
-                SELECT * FROM `dbt_biding_log`
-                WHERE `coinpair_id` = '$pair->id'
-                ORDER BY log_id DESC LIMIT 3
-            ";
-            $last_three_trades_query = $this->CI->db->query($sql_trade);
-
-            $coin_details = [
-                'coin_symbol' => $pair->currency_symbol,
-                'symbol' => $pair->symbol,
-                'coinpair_id' => $pair->id,
-                'name' => $pair->name,
-                'full_name' => $pair->full_name,
-                'status' => $pair->status,
-                'last_price' => 0,
-                'percent_change' => 0,
-                'price_flow' => 0, // 0 = stable, 1 = decreased, 2 = increased
-            ];
-
-            if ($last_three_trades_query->num_rows() > 0) {
-
-                $last_three_trades_queryArr = $last_three_trades_query->result_array();
-
-                if (!isset($last_three_trades_queryArr[1]) && $last_three_trades_queryArr[0]['bid_type'] == 'SELL') {
-                    $coin_details['price_flow'] = 1;
-                    $coin_details['percent_change'] = 0;
-                } else {
-
-                    $p1 = floatval($last_three_trades_queryArr[0]['bid_price']);
-                    $p2 = floatval($last_three_trades_queryArr[1]['bid_price']);
-
-                    if ($p1 == $p2) {
-                        $coin_details['price_flow'] = $last_three_trades_queryArr[0]['bid_type'] == 'SELL' ? 1 : 2;
-                        $coin_details['percent_change'] = 0;
-                    } else if ($p1 > $p2) {
-                        $coin_details['price_flow'] = 2;
-                        if ($p1 == 0) {
-                            $coin_details['percent_change'] = 100;
-                        } else {
-                            $coin_details['percent_change'] = 100 - abs((100 * $p2) / $p1);
-                        }
-
-                    } else if ($p1 < $p2) {
-                        $coin_details['price_flow'] = 1;
-                        if ($p1 == 0) {
-                            $coin_details['percent_change'] = 100;
-                        } else {
-                            $coin_details['percent_change'] = 100 - abs((100 * $p2) / $p1);
-                        }
-
-                    }
-                }
-            }
-
-            if ($summary_query->num_rows() > 0) {
-                $all_coin_pairs_summary[] = array_merge($summary_query->row_array(), $coin_details);
-            } else {
-                $all_coin_pairs_summary[] = $coin_details;
-            }
-        }
-
-        return $all_coin_pairs_summary;
     }
 }

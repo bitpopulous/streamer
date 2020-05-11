@@ -29,18 +29,11 @@ class ServerBaseHandler extends WebSocket
         $this->CI = &get_instance();
 
         $this->CI->load->model([
-            'backend/biding_model',
-            'backend/coinpair_model',
-            'backend/cryptocoin_model',
-            'payment_model'
+            'WsServer_model',
         ]);
 
         $this->CI->load->library([
             'ApiSocket',
-        ]);
-
-        $this->CI->load->library([
-            'ConvertData',
         ]);
     }
 
@@ -115,19 +108,6 @@ class ServerBaseHandler extends WebSocket
     {
         // TODO: Implement onPong() method.
         echo "PONG arrived: $msg \n";
-    }
-
-    protected function _get_pair_id_from_symbol(string $symbol)
-    {
-        $symbols = explode('_', $symbol);
-
-        $primary = $symbols[0];
-        $secondary = $symbols[1];
-
-        $primary_coin_id = $this->CI->cryptocoin_model->getIdOfSymbol($primary);
-        $secondary_coin_id = $this->CI->cryptocoin_model->getIdOfSymbol($secondary);
-
-        return $this->CI->coinpair_model->getCoinPairIdByPrimarySecondaryCoinId($primary_coin_id, $secondary_coin_id);
     }
 
     public function _get_clients()

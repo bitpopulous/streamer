@@ -13,25 +13,7 @@ class Buy extends Trade
         parent::__construct();
         $this->wss_server = $server;
     }
-
-    private function _get_sellers($price, $coin_id)
-    {
-
-        // Updating SL sell orders status and make them available if price changed
-        $this->CI->web_model->updateStopLimitStatus($coin_id);
-
-        $where = "(bid_price <= '" . $price . "' AND status = "
-        . PopulousWSSConstants::BID_PENDING_STATUS . " AND bid_type = 'SELL' AND coinpair_id = $coin_id )";
-
-        return $this->CI->db->select('*')
-            ->from('dbt_biding')
-            ->where($where)
-            ->order_by('bid_price', 'asc')
-            ->order_by('open_order', 'asc')
-            ->get()
-            ->result();
-    }
-
+    
     private function _do_buy_trade($buytrade, $selltrade)
     {
 
@@ -39,14 +21,9 @@ class Buy extends Trade
             && $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS) {
 
             $coin_id = intval($buytrade->coinpair_id);
-            $coin_pair_details = $this->CI->coinpair_model->getById($coin_id);
-
-            // PPT_USDT
-            $market_id = $coin_pair_details->market_id;
-            $primary_coin_id = $coin_pair_details->coin_id; // PPT
-
-            $market_details = $this->CI->common_model->getMarketDetailById($market_id);
-            $secondary_coin_id = $market_details->cryptocoin_id; // USDT
+            
+            $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
+            $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
 
             $trade_qty = $this->_safe_math(" LEAST( $selltrade->bid_qty_available, $buytrade->bid_qty_available ) ");
 
@@ -61,7 +38,7 @@ class Buy extends Trade
             // We don't have maker fees
             // We only charging fees whoever clearing the order book
 
-            $buyfeesquery = $this->CI->web_model->checkFeesByCoinId('BUY', $primary_coin_id);
+            $buyfeesquery = $this->CI->WsServer_model->get_fees_by_coin_id('BUY', $primary_coin_id);
 
             $fees_percent = 0;
             if ($buyfeesquery) {
@@ -71,7 +48,7 @@ class Buy extends Trade
             $buyer_receiving_amount_after_fees = $buyer_receiving_amount;
 
             $this->_read_fees_balance_env();
-            $fees_balance = floatval($this->CI->balance_model->getUserAvailableBalance($this->user_id, $this->fees_balance_of));
+            $fees_balance = floatval($this->CI->WsServer_model->get_user_available_balance($this->user_id, $this->fees_balance_of));
 
             $fees_amount = 0;
             // Fees will be deducted here according to whatever qty being bought
@@ -94,7 +71,7 @@ class Buy extends Trade
             $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount);
 
             // Credit fees to exchange account
-            $this->CI->web_model->creditAdminFeesById($primary_coin_id, $fees_amount);
+            $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $fees_amount);
 
             $buyerAvailableBidAmountAfterTrade = $this->_safe_math(" $buytrade->amount_available  - ($trade_qty * $buytrade->bid_price ) ");
             $sellerAvailableBidAmountAfterTrade = $this->_safe_math(" $selltrade->amount_available  - ( $trade_qty * $selltrade->bid_price ) ");
@@ -135,16 +112,15 @@ class Buy extends Trade
                 PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
             // Update coin history
-            $this->_update_coin_history($coin_id, $trade_qty, $buytrade->bid_price);
+            $this->CI->WsServer_model->update_coin_history($coin_id, $trade_qty, $buytrade->bid_price);
 
-            $this->CI->db->where('id', $buytrade->id)->update("dbt_biding", $buyupdate);
-            $this->CI->db->where('id', $selltrade->id)->update("dbt_biding", $sellupdate);
-            $this->CI->db->insert('dbt_biding_log', $buytraderlog);
-
-            $log_id = $this->CI->db->insert_id();
+            $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
+            $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
+            
+            $log_id = $this->CI->WsServer_model->insert_order_log( $buytraderlog);
 
             // Updating SL sell orders status and make them available if price changed
-            $this->CI->web_model->updateStopLimitStatus($coin_id);
+            $this->CI->WsServer_model->update_stop_limit_status($coin_id);
 
             /**
              * =================
@@ -206,43 +182,39 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_pair_details = $this->CI->coinpair_model->getById(intval($coin_id));
-        if ($coin_pair_details == null) {
+        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
             return $data;
         }
 
-        $check_input_values = $this->CI->coinpair_model->checkValues($amount, $price, $coin_id);
+        $check_values = $this->CI->WsServer_model->check_values($amount, $price, $coin_id);
 
-        if ($check_input_values == 1) {
+        if ($check_values == 1) {
             $data['isSuccess'] = false;
             $data['message'] = 'Amount is invalid. Please make sure the value is correct';
             return $data;
-        } else if ($check_input_values == 2) {
+        } else if ($check_values == 2) {
             $data['isSuccess'] = false;
             $data['message'] = 'Price is invalid. Please make sure the value is correct';
             return $data;
-        } else if ($check_input_values == 3) {
+        } else if ($check_values == 3) {
             $data['isSuccess'] = false;
             $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
             return $data;
         }
 
-        // PPT_USDT
-        $market_id = $coin_pair_details->market_id;
-        $primary_coin_id = $coin_pair_details->coin_id; // PPT
-
-        $market_details = $this->CI->common_model->getMarketDetailById($market_id);
-        $secondary_coin_id = $market_details->cryptocoin_id; // USDT
+        $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
+        $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
 
         $price = $this->_convert_to_decimals($price);
         $amount = $this->_convert_to_decimals($amount);
 
-        $buyfeesquery = $this->CI->web_model->checkFeesByCoinId('BUY', $primary_coin_id);
+        $buyfeesquery = $this->CI->WsServer_model->get_fees_by_coin_id('BUY', $primary_coin_id);
 
         $this->_read_fees_balance_env();
-        $fees_balance = floatval($this->CI->balance_model->getUserAvailableBalance($this->user_id, $this->fees_balance_of));
+        $fees_balance = floatval($this->CI->WsServer_model->get_user_available_balance($this->user_id, $this->fees_balance_of));
 
         /**
          * DASH_USD
@@ -267,8 +239,8 @@ class Buy extends Trade
         $buywithout_feesval = $this->_safe_math(" $price * $amount ");
         $buy_price_with_fees = $this->_safe_math(" $buywithout_feesval + $buyfeesval ");
 
-        $balance_to = $this->CI->web_model->checkBalanceById($secondary_coin_id, $this->user_id);
-        $balance_from = $this->CI->web_model->checkBalanceById($primary_coin_id, $this->user_id);
+        $balance_to = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $this->user_id);
+        $balance_from = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->user_id);
 
         if ($this->_safe_math_condition_check(" $balance_to->balance >= $buy_price_with_fees ") &&
             $this->_safe_math_condition_check(" $balance_to->balance > 0 ")) {
@@ -290,15 +262,15 @@ class Buy extends Trade
                 'status' => PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
-            $last_id = $this->CI->web_model->tradeCreate($tadata);
+            $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
             if ($last_id) {
 
-                $buytrade = $this->CI->web_model->single($last_id);
+                $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
-                $this->_credit_hold_balance_from_balance($buytrade->user_id, $secondary_coin_id, $buy_price_with_fees);
+                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($buytrade->user_id, $secondary_coin_id, $buy_price_with_fees);
 
-                $sellers = $this->_get_sellers($price, $coin_id);
+                $sellers = $this->CI->WsServer_model->get_sellers($price, $coin_id);
 
                 if ($sellers) {
 
@@ -306,7 +278,7 @@ class Buy extends Trade
                     // SELLER : P_DN S_UP
                     foreach ($sellers as $key => $selltrade) {
 
-                        $buytrade = $this->CI->web_model->single($last_id);
+                        $buytrade = $this->CI->WsServer_model->get_order($last_id);
                         $this->_do_buy_trade($buytrade, $selltrade);
                     }
 
@@ -366,24 +338,24 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_pair_details = $this->CI->coinpair_model->getById(intval($coin_id));
-        if ($coin_pair_details == null) {
+        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
             return $data;
         }
 
-        $check_input_values = $this->CI->coinpair_model->checkValues($amount, 1, $coin_id);
+        $check_values = $this->CI->WsServer_model->check_values($amount, 1, $coin_id);
 
-        if ($check_input_values == 1) {
+        if ($check_values == 1) {
             $data['isSuccess'] = false;
             $data['message'] = 'Amount is invalid. Please make sure the value is correct';
             return $data;
-        } else if ($check_input_values == 2) {
+        } else if ($check_values == 2) {
             $data['isSuccess'] = false;
             $data['message'] = 'Price is invalid. Please make sure the value is correct';
             return $data;
-        } else if ($check_input_values == 3) {
+        } else if ($check_values == 3) {
             $data['isSuccess'] = false;
             $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
             return $data;
@@ -391,17 +363,16 @@ class Buy extends Trade
 
         $amount = $this->_convert_to_decimals($amount);
         // PPT_USDT
-        $market_id = $coin_pair_details->market_id;
-        $primary_coin_id = $coin_pair_details->coin_id; // PPT
-        $primary_coin_symbol = $this->CI->cryptocoin_model->getIdOfSymbol($primary_coin_id);
-
-        $market_details = $this->CI->common_model->getMarketDetailById($market_id);
-        $secondary_coin_id = $market_details->cryptocoin_id; // USDT
-        $secondary_coin_symbol = $this->CI->cryptocoin_model->getIdOfSymbol($secondary_coin_id);
+        
+        $market_id = $coin_details->market_id;
+        
+        $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
+        $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
+        $primary_coin_symbol = $this->CI->WsServer_model->get_coin_id_of_symbol($primary_coin_id);
 
         // Check balance
-        $balance_prim = $this->CI->web_model->checkBalanceById($primary_coin_id, $this->user_id);
-        $balance_sec = $this->CI->web_model->checkBalanceById($secondary_coin_id, $this->user_id);
+        $balance_prim = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->user_id);
+        $balance_sec = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $this->user_id);
 
         if ($this->_safe_math_condition_check(" $balance_sec->balance  <= 0 ")) {
             $data['isSuccess'] = false;
@@ -413,13 +384,13 @@ class Buy extends Trade
 
         $remaining_qty = $amount;
 
-        $count_sell_orders = $this->CI->web_model->countSellOrders($coin_id);
+        $count_sell_orders = $this->CI->WsServer_model->count_sell_orders_by_coin_id($coin_id);
 
         if ($count_sell_orders < 1) {
             // No sell orders available, use initial price
-            $last_price = $this->CI->web_model->lastTradePriceById($coin_id);
+            $last_price = $this->CI->WsServer_model->get_last_trade_price($coin_id);
         } else {
-            $highest_seller_price = $this->CI->web_model->getHighestSellerPrice($coin_id);
+            $highest_seller_price = $this->CI->WsServer_model->get_highest_price_in_seller($coin_id);
             if ($highest_seller_price != null) {
                 $last_price = $highest_seller_price;
             }
@@ -436,16 +407,16 @@ class Buy extends Trade
             return $data;
         }
 
-        $sellers = $this->_get_sellers($last_price, $coin_id);
+        $sellers = $this->CI->WsServer_model->get_sellers($last_price, $coin_id);
 
-        $buyfeesquery = $this->CI->web_model->checkFeesByCoinId('BUY', $primary_coin_id);
+        $buyfeesquery = $this->CI->WsServer_model->get_fees_by_coin_id('BUY', $primary_coin_id);
         $fees_percent = 0;
         if ($buyfeesquery) {
             $fees_percent = $buyfeesquery->fees;
         }
 
         $this->_read_fees_balance_env();
-        $fees_balance = floatval($this->CI->balance_model->getUserAvailableBalance($this->user_id, $this->fees_balance_of));
+        $fees_balance = floatval($this->CI->WsServer_model->get_user_available_balance($this->user_id, $this->fees_balance_of));
 
         foreach ($sellers as $selltrade) {
 
@@ -480,7 +451,7 @@ class Buy extends Trade
                 'status' => PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
-            $last_id = $this->CI->web_model->tradeCreate($tadata);
+            $last_id = $this->CI->WsServer_model->insert_order($tadata);
             $this->wss_server->_event_push(
                 PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
                 [
@@ -490,10 +461,10 @@ class Buy extends Trade
 
             if ($last_id) {
 
-                $buytrade = $this->CI->web_model->single($last_id);
+                $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
                 // BUYER : HOLD SECONDARY COIN
-                $this->_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $buypricingwithfees);
+                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $buypricingwithfees);
 
                 $this->_do_buy_trade($buytrade, $selltrade);
 
@@ -514,14 +485,14 @@ class Buy extends Trade
             }
 
             // Updating SL sell orders status and make them available if price changed
-            // $this->CI->web_model->updateStopLimitStatus ( $coin_id );
+            // $this->CI->WsServer_model->update_stop_limit_status ( $coin_id );
 
         }
 
         if ($this->_safe_math_condition_check(" $remaining_qty > 0 ")) {
 
             $open_date = date('Y-m-d H:i:s');
-            $last_trade_price = $this->CI->web_model->lastTradePriceById($coin_id);
+            $last_trade_price = $this->CI->WsServer_model->get_last_trade_price($coin_id);
 
             if ($buyfeesquery) {
                 $buyfeesval = $this->_safe_math(" ( $remaining_qty * $buyfeesquery->fees)/100 ");
@@ -549,12 +520,12 @@ class Buy extends Trade
                 'status' => BID_PENDING_STATUS,
             );
 
-            $last_id = $this->CI->web_model->tradeCreate($tadata);
+            $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
             if ($last_id) {
 
                 // HOLD PRIMARY
-                $this->_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $buywithout_feesval);
+                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $buywithout_feesval);
 
                 $boughtAmount = $this->_safe_math(" $amount - $remaining_qty ");
 
@@ -575,14 +546,14 @@ class Buy extends Trade
                 );
 
                 $data['isSuccess'] = true;
-                $data['message'] = $this->_format_number($boughtAmount, $coin_pair_details->primary_decimals) . ' Bought. ' .
-                $this->_format_number($remaining_qty, $coin_pair_details->primary_decimals) . '  created open order at price ' .
-                $this->_format_number($last_trade_price, $coin_pair_details->secondary_decimals);
+                $data['message'] = $this->_format_number($boughtAmount, $coin_details->primary_decimals) . ' Bought. ' .
+                $this->_format_number($remaining_qty, $coin_details->primary_decimals) . '  created open order at price ' .
+                $this->_format_number($last_trade_price, $coin_details->secondary_decimals);
                 return $data;
             } else {
                 $data['isSuccess'] = false;
                 $data['message'] = 'Could not create open buy order for ' .
-                $this->_format_number($remaining_qty, $coin_pair_details->primary_decimals);
+                $this->_format_number($remaining_qty, $coin_details->primary_decimals);
                 return $data;
 
             }
@@ -595,7 +566,7 @@ class Buy extends Trade
                 ]
             );
             $data['isSuccess'] = true;
-            $data['message'] = 'All ' . $this->_format_number($amount, $coin_pair_details->primary_decimals) .
+            $data['message'] = 'All ' . $this->_format_number($amount, $coin_details->primary_decimals) .
                 ' bought successfully';
             return $data;
         }
@@ -617,8 +588,8 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_pair_details = $this->CI->coinpair_model->getById(intval($coin_id));
-        if ($coin_pair_details == null) {
+        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
             return $data;
@@ -629,19 +600,19 @@ class Buy extends Trade
          * PRICE : SECONDARY
          */
 
-        if ($this->_validate_secondary_value_decimals($stop, $coin_pair_details->secondary_decimals) == false) {
+        if ($this->_validate_secondary_value_decimals($stop, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
             $data['message'] = 'Buy Stop price invalid.';
             return $data;
         }
 
-        if ($this->_validate_secondary_value_decimals($limit, $coin_pair_details->secondary_decimals) == false) {
+        if ($this->_validate_secondary_value_decimals($limit, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
             $data['message'] = 'Buy Limit price invalid.';
             return $data;
         }
 
-        if ($this->_validate_primary_value_decimals($amount, $coin_pair_details->primary_decimals) == false) {
+        if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
             $data['message'] = 'Buy amount invalid.';
             return $data;
@@ -654,7 +625,7 @@ class Buy extends Trade
         $is_take_profit = false;
         $is_stop_loss = false;
 
-        $last_price = $this->CI->web_model->lastTradePriceById($coinpair_id);
+        $last_price = $this->CI->WsServer_model->get_last_trade_price($coin_id);
 
         if ($this->_safe_math_condition_check(" $stop >= $last_price ")) {
             $is_take_profit = true;
@@ -669,25 +640,13 @@ class Buy extends Trade
         // Create new open order
         $open_date = date('Y-m-d H:i:s');
 
-        $coinpair_id = intval($coinpair_id);
-        $coin_pair_details = $this->CI->coinpair_model->getById($coinpair_id);
-
-        // PPT_USDT
-        $primary_coin_id = $coin_pair_details->coin_id; // PPT
-        $market_details = $this->CI->common_model->getMarketDetailById($coin_pair_details->market_id);
-        $secondary_coin_id = $market_details->cryptocoin_id; // USDT
+        $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
+        $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
 
         $user_id = $this->user_id;
 
-        /*
-
-        stop price (trigger price)
-        Bit lower than the limit price (for buy orders)
-
-         */
-
         // Check balance
-        $balance_sec = $this->CI->web_model->checkBalanceById($secondary_coin_id, $this->user_id);
+        $balance_sec = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $user_id);
 
         $requiredAmount = $this->_safe_math(" $amount * $limit ");
         $availableAmount = $balance_sec->balance;
@@ -702,12 +661,12 @@ class Buy extends Trade
 
         // Enought amount to place order without checking fees
 
-        $buyfeesquery = $this->CI->web_model->checkFeesByCoinId('BUY', $primary_coin_id);
+        $buyfeesquery = $this->CI->WsServer_model->get_fees_by_coin_id('BUY', $primary_coin_id);
         $feesPercent = 0;
         $buyfeesval = 0;
 
         $this->_read_fees_balance_env();
-        $fees_balance = floatval($this->CI->balance_model->getUserAvailableBalance($this->user_id, $this->fees_balance_of));
+        $fees_balance = floatval($this->CI->WsServer_model->get_user_available_balance($this->user_id, $this->fees_balance_of));
 
         if ($buyfeesquery) {
             $feesPercent = $buyfeesquery->fees;
@@ -721,7 +680,7 @@ class Buy extends Trade
         $buywithout_feesval = $this->_safe_math(" $limit * $amount ");
         $buypricingwithfees = $this->_safe_math(" $buywithout_feesval - $buyfeesval ");
 
-        $last_price = $this->CI->web_model->lastTradePriceById($coinpair_id);
+        $last_price = $this->CI->WsServer_model->get_last_trade_price($coin_id);
 
         // Create one function for holding funds
 
@@ -734,7 +693,7 @@ class Buy extends Trade
             'bid_qty_available' => $amount,
             'total_amount' => $requiredAmount,
             'amount_available' => $requiredAmount,
-            'coinpair_id' => $coinpair_id,
+            'coinpair_id' => $coin_id,
             'user_id' => $user_id,
             'open_order' => $open_date,
             'fees_amount' => $buyfeesval,
@@ -743,7 +702,7 @@ class Buy extends Trade
             'status' => PopulousWSSConstants::BID_QUEUED_STATUS,
         );
 
-        $last_id = $this->CI->web_model->tradeCreate($tadata);
+        $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
         /**
          *
@@ -755,7 +714,7 @@ class Buy extends Trade
         if ($last_id) {
 
             // BUYER : HOLD SECONDARY COIN
-            $this->_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $requiredAmount);
+            $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $requiredAmount);
 
             // Event for order creator
             $this->wss_server->_event_push(
@@ -774,6 +733,103 @@ class Buy extends Trade
             $data['message'] = 'Could not create order';
             return $data;
         }
+    }
 
+    public function cancel_order($order_id, $auth, $rData) {
+        
+        $user_id = $this->private_event->_get_user_id($auth);
+        $ip_address = $rData['ip_address'];
+
+        $data = [
+            'isSuccess' => true,
+            'message' => '',
+        ];
+
+        $orderdata = $this->CI->WsServer_model->get_order($order_id);
+
+        if ($user_id != $orderdata->user_id) {
+            $data['isSuccess'] = false;
+            $data['message'] = 'You are not allow to cancel this order.';
+           
+        } else {
+
+            $canceltrade = array(
+                'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+            );
+
+            $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
+
+            if ($is_updated == false) {
+                $data['isSuccess'] = false;
+                $data['message'] = 'Could not cancelled the order';
+            } else {
+                $currency_symbol = '';
+                $currency_id = '';
+                $coin_id = $orderdata->coinpair_id;
+    
+                $refund_amount = '';
+                if ($orderdata->bid_type == 'SELL') {
+                    $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
+                    $refund_amount = $orderdata->bid_qty_available;
+                } else {
+                    $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
+                    $refund_amount = $this->_safe_math(" ($orderdata->bid_qty_available * $orderdata->bid_price) ");
+                }
+    
+                $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
+                
+                //User Financial Log
+                $tradecanceldata = array(
+                    'user_id' => $orderdata->user_id,
+                    'balance_id' => @$balance->id,
+                    'currency_id' => $currency_id,
+                    'transaction_type' => 'TRADE_CANCEL',
+                    'transaction_amount' => $refund_amount,
+                    'transaction_fees' => 0,
+                    'ip' => $ip_address,
+                    'date' => date('Y-m-d H:i:s'),
+                );
+    
+                $this->CI->WsServer_model->insert_order_log($tradecanceldata);
+                
+                $this->CI->WsServer_model->get_credit_balance($orderdata->user_id, $currency_id, $refund_amount);
+                // Release hold balance
+                $this->CI->WsServer_model->get_debit_hold_balance($orderdata->user_id, $currency_id, $refund_amount);
+    
+                $traderlog = array(
+                    'bid_id' => $orderdata->id,
+                    'bid_type' => $orderdata->bid_type,
+                    'complete_qty' => $orderdata->bid_qty_available,
+                    'bid_price' => $orderdata->bid_price,
+                    'complete_amount' => $refund_amount,
+                    'user_id' => $orderdata->user_id,
+                    'coinpair_id' => $orderdata->coinpair_id,
+                    'success_time' => date('Y-m-d H:i:s'),
+                    'fees_amount' => $orderdata->fees_amount,
+                    'available_amount' => $orderdata->amount_available,
+                    'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+                );
+    
+                $this->CI->WsServer_model->insert_order_log('dbt_biding_log', $traderlog);
+    
+                $this->_event_push(
+                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                    [
+                        'order_id' => $order_id,
+                        'user_id' => $user_id,
+                    ]
+                );
+                $this->_event_push(
+                    PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
+                    [
+                        'coin_id' => $orderdata->coinpair_id,
+                    ]
+                );
+                
+                $data['isSuccess'] = true;
+                $data['message'] = 'Request cancelled successfully.';
+            }
+        }
+        return $data;
     }
 }

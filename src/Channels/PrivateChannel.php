@@ -17,18 +17,7 @@ class PrivateChannel extends Auth
         $this->CI = &get_instance();
 
         $this->CI->load->model([
-            'backend/privatechannels_model',
-            'backend/biding_model',
-            'backend/bidinglog_model',
-            'backend/cryptocoin_model',
-            'backend/channels_model',
-            'website/coinhistory_model',
-            'website/web_model',
-            'common_model',
-        ]);
-
-        $this->CI->load->library([
-            'ConvertData',
+            'WsServer_model',
         ]);
     }
     

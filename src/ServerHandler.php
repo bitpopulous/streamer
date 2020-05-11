@@ -76,28 +76,13 @@ class ServerHandler extends ServerBaseHandler
         if ($event == 'orderbook-init') {
 
             $market = $rData['market'];
-            $pair_id = $this->_get_pair_id_from_symbol($market);
-
-            $data = $this->CI->biding_model->getBuySellOrders($pair_id, 40);
-            $buy_orders = $this->CI->convertdata->convertDataArray(
-                $data['buy_orders'],
-                ['bid_price:1', 'total_qty:0'],
-                $pair_id
-            );
-            $sell_orders = $this->CI->convertdata->convertDataArray(
-                $data['sell_orders'],
-                ['bid_price:1', 'total_qty:0'],
-                $pair_id
-            );
-            
+            $coin_id = $this->CI->WsServer_model->get_coin_id_from_symbol($market);
             $data_send = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => [
-                    'buy_orders' => $buy_orders,
-                    'sell_orders' => $sell_orders,
-                ],
+                'data' => $this->CI->WsServer_model->get_orders($coin_id, 40),
             ];
+
             $recv->send(json_encode($data_send));
             
         } else if ($event == 'exchange-buy') {
@@ -198,106 +183,12 @@ class ServerHandler extends ServerBaseHandler
         } else if ($event == 'exchange-cancel-order') {
 
             $order_id = $rData['order_id'];
-            $user_id = $this->private_event->_get_user_id($rData['ua']);
-            $ip_address = $rData['ip_address'];
-    
-            $data = [
-                'isSuccess' => true,
-                'message' => '',
-            ];
-    
-            $orderdata = $this->CI->web_model->single($order_id);
-    
-            if ($user_id != $orderdata->user_id) {
-                $data['isSuccess'] = false;
-                $data['message'] = 'You are not allow to cancel this order.';
-                
-            } else {
-    
-                $canceltrade = array(
-                    'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
-                );
-    
-                $is_status_changed_to_cancel = $this->CI->db->where('id', $order_id)->update("dbt_biding", $canceltrade);
-    
-                if ($is_status_changed_to_cancel == false) {
-                    $data['isSuccess'] = false;
-                    $data['message'] = 'Could not cancelled the order';
-                } else {
-                    $currency_symbol = '';
-                    $currency_id = '';
-                    $coninpairId = $orderdata->coinpair_id;
-        
-                    $refund_amount = '';
-                    if ($orderdata->bid_type == 'SELL') {
-                        $currency_id = $this->CI->coinpair_model->getPrimaryCoinId($coninpairId);
-                        $refund_amount = $orderdata->bid_qty_available;
-                    } else {
-                        $currency_id = $this->CI->coinpair_model->getSecondaryCoinId($orderdata->coinpair_id);
-                        $refund_amount = $this->CI->common_model->doSqlArithMetic(" ($orderdata->bid_qty_available * $orderdata->bid_price) ");
-                    }
-        
-                    $balance = $this->CI->web_model->checkBalanceById($currency_id, $orderdata->user_id);
-                    $new_balance = $this->CI->common_model->doSqlArithMetic(" ( $balance->balance + $refund_amount )");
-        
-                    //User Financial Log
-                    $tradecanceldata = array(
-                        'user_id' => $orderdata->user_id,
-                        'balance_id' => @$balance->id,
-                        'currency_id' => $currency_id,
-                        'transaction_type' => 'TRADE_CANCEL',
-                        'transaction_amount' => $refund_amount,
-                        'transaction_fees' => 0,
-                        'ip' => $ip_address,
-                        'date' => date('Y-m-d H:i:s'),
-                    );
-        
-                    $this->CI->payment_model->balancelog($tradecanceldata);
-        
-                    $this->CI->db->set('balance', $new_balance)->where('user_id', $orderdata->user_id)->where('currency_id', $currency_id)->update("dbt_balance");
-        
-                    // Release hold balance
-                    $this->CI->web_model->holdBalanceDebitById($orderdata->user_id, $currency_id, $refund_amount);
-        
-                    $traderlog = array(
-                        'bid_id' => $orderdata->id,
-                        'bid_type' => $orderdata->bid_type,
-                        'complete_qty' => $orderdata->bid_qty_available,
-                        'bid_price' => $orderdata->bid_price,
-                        'complete_amount' => $refund_amount,
-                        'user_id' => $orderdata->user_id,
-                        'coinpair_id' => $orderdata->coinpair_id,
-                        'success_time' => date('Y-m-d H:i:s'),
-                        'fees_amount' => $orderdata->fees_amount,
-                        'available_amount' => $orderdata->amount_available,
-                        'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
-                    );
-        
-                    $this->CI->db->insert('dbt_biding_log', $traderlog);
-        
-                    $this->_event_push(
-                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                        [
-                            'order_id' => $order_id,
-                            'user_id' => $user_id,
-                        ]
-                    );
-                    $this->_event_push(
-                        PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                        [
-                            'coin_id' => $orderdata->coinpair_id,
-                        ]
-                    );
-                    
-                    $data['isSuccess'] = true;
-                    $data['message'] = 'Request cancelled successfully.';
-                }
-            }
+            $auth = $rData['ua'];
 
             $data_send = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $data,
+                'data' => $this->buy->cancel_order($order_id, $auth, $rData),
             ];
 
             $recv->send(json_encode($data_send));
@@ -305,7 +196,7 @@ class ServerHandler extends ServerBaseHandler
         } else if ($event == 'exchange-init') {
 
             $market = $rData['market'];
-            $coin_id = $this->_get_pair_id_from_symbol($market);
+            $coin_id = $this->CI->WsServer_model->get_coin_id_from_symbol($market);
             $ua = $rData['ua'];
             
             $data_send = [
@@ -318,7 +209,7 @@ class ServerHandler extends ServerBaseHandler
         } else if ($event == 'exchange-init-guest') {
             
             $market = $rData['market'];
-            $coin_id = $this->_get_pair_id_from_symbol($market);
+            $coin_id = $this->CI->WsServer_model->get_coin_id_from_symbol($market);
             
             $data_send = [
                 'event' => $event,
@@ -333,7 +224,7 @@ class ServerHandler extends ServerBaseHandler
             $arr_return = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $this->CI->apisocket->getKeys($user_id)
+                'data' => $this->CI->WsServer_model->get_api_keys($user_id)
             ];
             $recv->send(json_encode($arr_return));
 
@@ -347,7 +238,7 @@ class ServerHandler extends ServerBaseHandler
             $arr_return = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $this->CI->apisocket->createKey($user_id, $api_name, $ga_token)
+                'data' => $this->CI->WsServer_model->create_api_key($user_id, $api_name, $ga_token)
             ];
             $recv->send(json_encode($arr_return));
 
@@ -361,7 +252,7 @@ class ServerHandler extends ServerBaseHandler
             $arr_return = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $this->CI->apisocket->updateKey($user_id, $api_id, $ga_token, $ip_addr, $rData),
+                'data' => $this->CI->WsServer_model->update_api_key($user_id, $api_id, $ga_token, $ip_addr, $rData),
             ];
 
             $recv->send(json_encode($arr_return));
@@ -376,7 +267,7 @@ class ServerHandler extends ServerBaseHandler
             $arr_return = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $this->CI->apisocket->deleteKey($user_id, $api_id, $ga_token, $ip_addr)
+                'data' => $this->CI->WsServer_model->delete_api_key($user_id, $api_id, $ga_token, $ip_addr)
             ];
             $recv->send(json_encode($arr_return));
             
