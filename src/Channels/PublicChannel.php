@@ -21,6 +21,7 @@ class PublicChannel
             'backend/biding_model',	
             'backend/bidinglog_model',	
             'backend/cryptocoin_model',	
+            'backend/coinpair_model',
             'backend/channels_model',	
             'website/coinhistory_model',	
             'website/web_model',	
