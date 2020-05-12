@@ -737,7 +737,7 @@ class Buy extends Trade
 
     public function cancel_order($order_id, $auth, $rData) {
         
-        $user_id = $this->private_event->_get_user_id($auth);
+        $user_id = $this->_get_user_id($auth);
         $ip_address = $rData['ip_address'];
 
         $data = [
