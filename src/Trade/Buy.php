@@ -777,7 +777,7 @@ class Buy extends Trade
                 }
     
                 $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
-                
+                $new_balance = $this->CI->WsServer_model->calculation_math(" ( $balance->balance + $refund_amount )");
                 //User Financial Log
                 $tradecanceldata = array(
                     'user_id' => $orderdata->user_id,
@@ -790,9 +790,9 @@ class Buy extends Trade
                     'date' => date('Y-m-d H:i:s'),
                 );
     
-                $this->CI->WsServer_model->insert_order_log($tradecanceldata);
+                $this->db->insert('dbt_balance_log', $tradecanceldata);
                 
-                $this->CI->WsServer_model->get_credit_balance($orderdata->user_id, $currency_id, $refund_amount);
+                $this->db->set('balance', $new_balance)->where('user_id', $orderdata->user_id)->where('currency_id', $currency_id)->update("dbt_balance");
                 // Release hold balance
                 $this->CI->WsServer_model->get_debit_hold_balance($orderdata->user_id, $currency_id, $refund_amount);
     
