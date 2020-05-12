@@ -808,7 +808,7 @@ class Buy extends Trade
                     'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
                 );
     
-                $this->CI->WsServer_model->insert_order_log('dbt_biding_log', $traderlog);
+                $this->CI->WsServer_model->insert_order_log($traderlog);
     
                 $this->wss_server->_event_push(
                     PopulousWSSConstants::EVENT_ORDER_UPDATED,
