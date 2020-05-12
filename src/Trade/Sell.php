@@ -199,8 +199,6 @@ class Sell extends Trade
 
         $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
         $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
-        var_dump($primary_coin_id);
-        var_dump($secondary_coin_id);
         $price = $this->_convert_to_decimals($price);
         $amount = $this->_convert_to_decimals($amount);
 

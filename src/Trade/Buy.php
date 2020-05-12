@@ -777,7 +777,6 @@ class Buy extends Trade
                 }
     
                 $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
-                $new_balance = $this->CI->WsServer_model->calculation_math(" ( $balance->balance + $refund_amount )");
                 //User Financial Log
                 $tradecanceldata = array(
                     'user_id' => $orderdata->user_id,
@@ -790,12 +789,11 @@ class Buy extends Trade
                     'date' => date('Y-m-d H:i:s'),
                 );
     
-                $this->db->insert('dbt_balance_log', $tradecanceldata);
-                
-                $this->db->set('balance', $new_balance)->where('user_id', $orderdata->user_id)->where('currency_id', $currency_id)->update("dbt_balance");
+                $this->CI->WsServer_model->insert_balance_log('dbt_balance_log', $tradecanceldata);
+                $this->CI->WsServer_model->get_credit_balance($orderdata->user_id, $currency_id, $refund_amount);
                 // Release hold balance
                 $this->CI->WsServer_model->get_debit_hold_balance($orderdata->user_id, $currency_id, $refund_amount);
-    
+                
                 $traderlog = array(
                     'bid_id' => $orderdata->id,
                     'bid_type' => $orderdata->bid_type,
@@ -812,14 +810,14 @@ class Buy extends Trade
     
                 $this->CI->WsServer_model->insert_order_log('dbt_biding_log', $traderlog);
     
-                $this->_event_push(
+                $this->wss_server->_event_push(
                     PopulousWSSConstants::EVENT_ORDER_UPDATED,
                     [
                         'order_id' => $order_id,
                         'user_id' => $user_id,
                     ]
                 );
-                $this->_event_push(
+                $this->wss_server->_event_push(
                     PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
                     [
                         'coin_id' => $orderdata->coinpair_id,
