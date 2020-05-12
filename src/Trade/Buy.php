@@ -789,7 +789,7 @@ class Buy extends Trade
                     'date' => date('Y-m-d H:i:s'),
                 );
     
-                $this->CI->WsServer_model->insert_balance_log('dbt_balance_log', $tradecanceldata);
+                $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
                 $this->CI->WsServer_model->get_credit_balance($orderdata->user_id, $currency_id, $refund_amount);
                 // Release hold balance
                 $this->CI->WsServer_model->get_debit_hold_balance($orderdata->user_id, $currency_id, $refund_amount);
