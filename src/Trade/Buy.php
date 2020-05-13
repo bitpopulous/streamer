@@ -189,19 +189,15 @@ class Buy extends Trade
             return $data;
         }
 
-        $check_values = $this->CI->WsServer_model->check_values($amount, $price, $coin_id);
+        if ($this->_validate_secondary_value_decimals($price, $coin_details->secondary_decimals) == false) {
+            $data['isSuccess'] = false;
+            $data['message'] = 'Buy price is invalid.';
+            return $data;
+        }
 
-        if ($check_values == 1) {
+        if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Amount is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 2) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Price is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 3) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
+            $data['message'] = 'Buy amount is invalid.';
             return $data;
         }
 
@@ -345,27 +341,15 @@ class Buy extends Trade
             return $data;
         }
 
-        $check_values = $this->CI->WsServer_model->check_values($amount, 1, $coin_id);
-
-        if ($check_values == 1) {
+        if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Amount is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 2) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Price is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 3) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
+            $data['message'] = 'Buy amount is invalid.';
             return $data;
         }
 
         $amount = $this->_convert_to_decimals($amount);
+
         // PPT_USDT
-        
-        $market_id = $coin_details->market_id;
-        
         $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
         $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
         $primary_coin_symbol = $this->CI->WsServer_model->get_coin_id_of_symbol($primary_coin_id);
