@@ -189,6 +189,12 @@ class Buy extends Trade
             return $data;
         }
 
+        if ($amount == 0 || $price == 0) {
+            $data['isSuccess'] = false;
+            $data['message'] = 'Please type non-zero value.';
+            return $data;
+        }
+
         $check_values = $this->CI->WsServer_model->check_values($amount, $price, $coin_id);
 
         if ($check_values == 1) {
@@ -342,6 +348,12 @@ class Buy extends Trade
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
+            return $data;
+        }
+
+        if ($amount == 0) {
+            $data['isSuccess'] = false;
+            $data['message'] = 'Please type non-zero value.';
             return $data;
         }
 
@@ -599,6 +611,12 @@ class Buy extends Trade
          * AMOUNT : PRIMARY
          * PRICE : SECONDARY
          */
+
+        if ($stop == 0 || $limit == 0 || $price == 0) {
+            $data['isSuccess'] = false;
+            $data['message'] = 'Please type non-zero value.';
+            return $data;
+        }
 
         if ($this->_validate_secondary_value_decimals($stop, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
