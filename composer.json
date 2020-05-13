@@ -1,9 +1,9 @@
 {
-    "name": "populous/php-wss",
+    "name": "populous/streamer",
     "type": "library",
-    "description": "packages for php-wss websocket server in populous",
-    "keywords": ["websocket","wss","populous","ppt"],
-    "homepage": "https://test2.populous.world",
+    "description": "packages for websocket streamer server in populous",
+    "keywords": ["websocket","wss","populous","ppt", "streamer"],
+    "homepage": "https://populous.world",
     "license": "MIT",
     "authors": [
         {
