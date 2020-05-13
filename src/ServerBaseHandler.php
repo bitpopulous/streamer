@@ -31,10 +31,6 @@ class ServerBaseHandler extends WebSocket
         $this->CI->load->model([
             'WsServer_model',
         ]);
-
-        $this->CI->load->library([
-            'ApiSocket',
-        ]);
     }
 
     public function onOpen(ConnectionContract $conn)
