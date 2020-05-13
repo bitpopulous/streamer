@@ -39,6 +39,7 @@ class WsServer /*extends WssMain implements WebSocketServerContract */
     public function runWsServer()
     {
         ini_set('default_socket_timeout', 1000000000);
+        
         $config = new ServerConfig();
         $config->setHost($this->ip);
         $config->setPort($this->port);
