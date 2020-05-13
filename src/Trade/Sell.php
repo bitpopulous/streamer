@@ -181,30 +181,21 @@ class Sell extends Trade
          * PRICE : SECONDARY
          */
 
-        if ($amount == 0 || $price == 0) {
+        if ($this->_validate_secondary_value_decimals($price, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Please type non-zero value.';
+            $data['message'] = 'Sell price invalid.';
             return $data;
         }
 
-        $check_values = $this->CI->WsServer_model->check_values($amount, $price, $coin_id);
-
-        if ($check_values == 1) {
+        if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Amount is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 2) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Price is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 3) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
+            $data['message'] = 'Sell amount invalid.';
             return $data;
         }
 
         $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
         $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
+
         $price = $this->_convert_to_decimals($price);
         $amount = $this->_convert_to_decimals($amount);
 
@@ -303,7 +294,7 @@ class Sell extends Trade
                 );
 
                 $data['isSuccess'] = true;
-                $data['message'] = 'Buy order successfully placed.';
+                $data['message'] = 'Sell order successfully placed.';
 
                 return $data;
 
@@ -344,25 +335,9 @@ class Sell extends Trade
             return $data;
         }
 
-        if ($amount == 0) {
+        if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Please type non-zero value.';
-            return $data;
-        }
-
-        $check_values = $this->CI->WsServer_model->check_values($amount, 1, $coin_id);
-
-        if ($check_values == 1) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Amount is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 2) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Price is invalid. Please make sure the value is correct';
-            return $data;
-        } else if ($check_values == 3) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Amount & Price are invalid. Please make sure the value is correct';
+            $data['message'] = 'Sell amount invalid.';
             return $data;
         }
 
@@ -594,27 +569,21 @@ class Sell extends Trade
             return $data;
         }
 
-        if ($amount == 0 || $stop == 0 || $limit == 0) {
-            $data['isSuccess'] = false;
-            $data['message'] = 'Please type non-zero value.';
-            return $data;
-        }
-
         if ($this->_validate_secondary_value_decimals($stop, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Buy Stop price invalid.';
+            $data['message'] = 'Sell Stop price invalid.';
             return $data;
         }
 
         if ($this->_validate_secondary_value_decimals($limit, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Buy Limit price invalid.';
+            $data['message'] = 'Sell Limit price invalid.';
             return $data;
         }
 
         if ($this->_validate_primary_value_decimals($amount, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
-            $data['message'] = 'Buy amount invalid.';
+            $data['message'] = 'Sell amount invalid.';
             return $data;
         }
 
