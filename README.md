@@ -143,7 +143,6 @@ Response Payload
         "amount_available": "AMOUNT_AVAILABLE_NUMBER",
         "bid_price": "PRICE_OF_BUYING",
         "bid_qty": "AMOUNT_OF_BUYING",
-        ...
     }
 }
 ```
@@ -172,8 +171,8 @@ Response Payload
     "event": "orderbook-update",
     "channel": "market-<MARKET_NAME>-global",
     "data": {
-        "buy_orders": [...],
-        "sell_orders": [...],
+        "buy_orders": "<BUY_ORDER_DATA_ARRAY>",
+        "sell_orders": "<SELL_ORDER_DATA_ARRAY>",
     }
 }
 ```
@@ -186,9 +185,8 @@ Response Payload
             "bid_price": "1.53",
             "bid_type": "SELL",
             "complete_qty": "30",
-            "success_time: "2020-05-13 17:04:31"
+            "success_time: `2020-05-13 17:04:31`
         },
-        ...
     ]
 }
 ```
@@ -215,15 +213,23 @@ Response Payload
 ```
 
 Error Response payload
+
+message will have one of [
+"User could not found.",
+"Invalid pair",
+"Buy price is invalid.",
+"Buy amount is invalid.",
+"Trade could not submitted.",
+"Insufficient balance."
+]
+
 ```json
 {
     "event": "exchange-buy",
     "channel": "private-<PRIVATE_ID>",
     "data": {
         "isSuccess": false,
-        "message": "User could not found." || "Invalid pair"
-            || "Buy price is invalid." || "Buy amount is invalid."
-            || "Trade could not submitted." || "Insufficient balance." ,
+        "message": "User could not found." ,
         "trade_type": "limit"
     }
 }
