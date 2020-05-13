@@ -3,12 +3,12 @@
     "type": "library",
     "description": "packages for php-wss websocket server in populous",
     "keywords": ["websocket","wss","populous","ppt"],
-    "homepage": "https://test2.populous.world",
+    "homepage": "https://exchange.populous.world",
     "license": "MIT",
     "authors": [
         {
-            "name": "Remi Besnard",
-            "email": "bluesven869@gmail.com",
+            "name": "Populous World Ltd",
+            "email": "developers@populous.world",
             "role": "Developer"
         }
     ],
