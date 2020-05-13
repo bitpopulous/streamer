@@ -1,5 +1,5 @@
 {
-    "name": "populous/php-wss",
+    "name": "populous/streamer",
     "type": "library",
     "description": "packages for php-wss websocket server in populous",
     "keywords": ["websocket","wss","populous","ppt"],
