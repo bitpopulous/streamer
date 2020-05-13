@@ -1,14 +1,14 @@
 {
     "name": "populous/streamer",
     "type": "library",
-    "description": "packages for websocket streamer server in populous",
-    "keywords": ["websocket","wss","populous","ppt", "streamer"],
-    "homepage": "https://populous.world",
+    "description": "packages for php-wss websocket server in populous",
+    "keywords": ["websocket","wss","populous","ppt"],
+    "homepage": "https://exchange.populous.world",
     "license": "MIT",
     "authors": [
         {
-            "name": "Remi Besnard",
-            "email": "bluesven869@gmail.com",
+            "name": "Populous World Ltd",
+            "email": "developers@populous.world",
             "role": "Developer"
         }
     ],
