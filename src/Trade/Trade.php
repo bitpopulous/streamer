@@ -75,13 +75,24 @@ class Trade extends Auth
     {
         $primary_max = $this->CI->WsServer_model->max_value($decimals);
         $primary_min = $this->CI->WsServer_model->min_value($decimals);
-        return $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
+        return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
     }
 
     protected function _validate_secondary_value_decimals($number, $decimals)
     {
         $secondary_max = $this->CI->WsServer_model->max_value($decimals);
         $secondary_min = $this->CI->WsServer_model->min_value($decimals);
-        return $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
+
+        return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
+    }
+
+    protected function _validate_decimals( $number, $decimals ){
+
+        $number = str($number);
+
+        $l = (int) strlen(substr(strrchr($number, "."), 1));        
+        if( $l <= $decimals ) return TRUE;
+        
+        return FALSE;
     }
 }
