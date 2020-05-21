@@ -171,7 +171,7 @@ class Sell extends Trade
         }
 
         $coin_id = intval($coin_id);
-        $coin_details = $this->CI->WsServer_model->get_coin($coin_id);
+        $coin_details = $this->CI->WsServer_model->get_coin_pair($coin_id);
 
         if ($coin_details == null) {
             $data['isSuccess'] = false;
@@ -332,7 +332,7 @@ class Sell extends Trade
             return $data;
         }
 
-        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        $coin_details = $this->CI->WsServer_model->get_coin_pair(intval($coin_id));
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
@@ -566,7 +566,7 @@ class Sell extends Trade
         }
 
         $coin_id = intval($coin_id);
-        $coin_details = $this->CI->WsServer_model->get_coin($coin_id);
+        $coin_details = $this->CI->WsServer_model->get_coin_pair($coin_id);
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
