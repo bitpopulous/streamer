@@ -84,6 +84,7 @@ class Sell extends Trade
 
             // DASH_USD
             $success_datetime = date('Y-m-d H:i:s');
+            $success_datetimestamp = strtotime($success_datetime);
 
             $selltraderlog = array(
                 'bid_id' => $selltrade->id,
@@ -110,6 +111,9 @@ class Sell extends Trade
             // UPDATE SL Order
             $this->CI->WsServer_model->update_stop_limit_status($coin_id);
 
+            // Updating Current minute OHLCV
+            $this->CI->WsServer_model->update_current_minute_OHLCV( $selltrade->coinpair_id, $selltrade->bid_price, $trade_qty, $success_datetimestamp );
+            
             /**
              * =================
              * EVENTS
