@@ -96,6 +96,7 @@ class Buy extends Trade
 
             // DASH_USD
             $success_datetime = date('Y-m-d H:i:s');
+            $success_datetimestamp = strtotime($success_datetime);
 
             $buytraderlog = array(
                 'bid_id' => $buytrade->id,
@@ -122,6 +123,8 @@ class Buy extends Trade
             // Updating SL sell orders status and make them available if price changed
             $this->CI->WsServer_model->update_stop_limit_status($coin_id);
 
+            // Updating Current minute OHLCV
+            $this->CI->WsServer_model->update_current_minute_OHLCV( $buytrade->coinpair_id, $buytrade->bid_price, $trade_qty, $success_datetimestamp );            
             /**
              * =================
              * EVENTS
@@ -182,7 +185,7 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        $coin_details = $this->CI->WsServer_model->get_coin_pair(intval($coin_id));
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
@@ -334,7 +337,7 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        $coin_details = $this->CI->WsServer_model->get_coin_pair(intval($coin_id));
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
@@ -572,7 +575,7 @@ class Buy extends Trade
             return $data;
         }
 
-        $coin_details = $this->CI->WsServer_model->get_coin(intval($coin_id));
+        $coin_details = $this->CI->WsServer_model->get_coin_pair(intval($coin_id));
         if ($coin_details == null) {
             $data['isSuccess'] = false;
             $data['message'] = 'Invalid pair';
