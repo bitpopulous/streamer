@@ -148,7 +148,7 @@ class PublicEvent extends PublicChannel
         $orders = $this->CI->WsServer_model->get_orders($coin_id, 40);
         
         return [
-            'coinpairs_24h_summary' => $this->CI->WsServer_model->get_coinpairs_24h_summary(),
+            'coinpairs_24h_summary' => $this->CI->WsServer_model->get_coinpairs_24h_summary($coin_id),
             'market_pairs' => $this->CI->WsServer_model->get_market_pairs(),
             'trade_history' => $this->CI->WsServer_model->get_trades_history($coin_id, 60),
             'coin_history' => $this->CI->WsServer_model->get_coins_history($coin_id, 20),
