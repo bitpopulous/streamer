@@ -58,20 +58,32 @@ class PublicEvent extends PublicChannel
     public function _event_trade_create($log_id)
     {
         $tc_event = $this->_prepare_trade_create($log_id);
-        $summary_event = $this->_prepare_24_hour_summary();
 
-        if ($tc_event && $summary_event ) {
+        if ($tc_event ) {
 
             $coin_symbol            = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($tc_event['data']['coinpair_id']);
             $market_channel         = $this->CI->WsServer_model->get_market_global_channel($coin_symbol);
-            $market_summary_channel = $this->CI->WsServer_model->get_market_summary_channel();
 
             $channels = [];
             $channels[$market_channel] = [];
             $channels[$market_channel][] = $tc_event;
 
+
+            $this->_push_event_to_channels($channels);
+        }
+    }
+
+    public function _event_24h_summary_update(){
+
+        $summary = $this->_prepare_24_hour_summary();
+        
+        if( $summary ){
+            
+            $market_summary_channel = $this->CI->WsServer_model->get_market_summary_channel();
+            $channels = [];
+    
             $channels[$market_summary_channel] = [];
-            $channels[$market_summary_channel] = $summary_event;
+            $channels[$market_summary_channel] = $summary;
 
             $this->_push_event_to_channels($channels);
         }
@@ -148,17 +160,20 @@ class PublicEvent extends PublicChannel
         return false;
     }
 
+    public function get_24_hour_summary(){
+        return $this->CI->WsServer_model->get_all_active_coinpairs_24h_summary();
+    }
 
-    private function _prepare_24_hour_summary()
+    public function _prepare_24_hour_summary()
     {
-        $summary = $this->CI->WsServer_model->get_all_active_coinpairs_24h_summary();
+        $summary = $this->get_24_hour_summary();
 
         if ($summary) {
 
             return [
-                'event' => '24h-summary',
+                'event' => 'market-update-24h-summary',
                 'data' => $summary,
-            ];
+            ];                  
         }
 
         return false;
@@ -169,7 +184,6 @@ class PublicEvent extends PublicChannel
         $orders = $this->CI->WsServer_model->get_orders($coin_id, 40);
         
         return [
-            'coinpairs_24h_summary' => $this->CI->WsServer_model->get_all_active_coinpairs_24h_summary(),
             'market_pairs' => $this->CI->WsServer_model->get_market_pairs(),
             'trade_history' => $this->CI->WsServer_model->get_trades_history($coin_id, 60),
             'coin_history' => $this->CI->WsServer_model->get_coins_history($coin_id, 20),
