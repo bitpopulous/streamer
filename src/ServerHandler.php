@@ -218,7 +218,16 @@ class ServerHandler extends ServerBaseHandler
             ];
             $recv->send(json_encode($data_send));
             
-        } else if ($event == 'api-setting-init') {
+        }else if ( $event == 'market-init-summary' ) {
+                        
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' => $this->public_event->_prepare_24_hour_summary(),
+            ];
+            $recv->send(json_encode($data_send));
+            
+        }else if ($event == 'api-setting-init') {
 
             $user_id = $this->private_event->_get_user_id($rData['ua']);
             $arr_return = [
