@@ -62,6 +62,7 @@ class ServerHandler extends ServerBaseHandler
             case PopulousWSSConstants::EVENT_TRADE_CREATED:
                 $log_id = $data['log_id'];
                 $this->public_event->_event_trade_create($log_id);
+                $this->public_event->_event_24h_summary_update();
             break;
 
             default:
@@ -215,6 +216,15 @@ class ServerHandler extends ServerBaseHandler
                 'event' => $event,
                 'channel' => $channel,
                 'data' => $this->public_event->_prepare_exchange_init_data($coin_id),
+            ];
+            $recv->send(json_encode($data_send));
+            
+        } else if ( $event == 'market-init-24h-summary' ) {
+                        
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' => $this->public_event->get_24_hour_summary(),
             ];
             $recv->send(json_encode($data_send));
             
