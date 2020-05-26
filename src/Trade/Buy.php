@@ -53,7 +53,7 @@ class Buy extends Trade
             $fees_amount = 0;
             // Fees will be deducted here according to whatever qty being bought
             if ($fees_percent != 0) {
-                $fees_amount = $this->_safe_math(" ( ( $buyer_receiving_amount * $fees_percent ) / 100 ) ");
+                $fees_amount = $this->_safe_math("  ( $buyer_receiving_amount * $fees_percent ) / 100  ");
                 if ($fees_balance >= $this->fees_balance_above) {
                     $fees_amount = $this->_safe_math(" $fees_amount * (100 - $this->fees_balance_discount) / 100 ");
                 }
@@ -79,8 +79,8 @@ class Buy extends Trade
             $buyerAvailableQtyAfterTrade = $this->_safe_math(" $buytrade->bid_qty_available - $trade_qty ");
             $sellerAvailableQtyAfterTrade = $this->_safe_math(" $selltrade->bid_qty_available - $trade_qty ");
 
-            $isBuyerQtyFulfilled = $this->_safe_math_condition_check(" ( $buyerAvailableQtyAfterTrade <= 0 )  ");
-            $isSellerQtyFulfilled = $this->_safe_math_condition_check(" ( $sellerAvailableQtyAfterTrade <= 0 )  ");
+            $isBuyerQtyFulfilled = $this->_safe_math_condition_check("  $buyerAvailableQtyAfterTrade <= 0   ");
+            $isSellerQtyFulfilled = $this->_safe_math_condition_check("  $sellerAvailableQtyAfterTrade <= 0  ");
 
             $buyupdate = array(
                 'bid_qty_available' => $buyerAvailableQtyAfterTrade,
@@ -157,6 +157,9 @@ class Buy extends Trade
                     ]
                 );
 
+                $this->wss_server->_event_push(
+                    PopulousWSSConstants::EVENT_MARKET_SUMMARY,[]
+                );
             } catch (Exception $e) {
 
             }
@@ -225,7 +228,7 @@ class Buy extends Trade
 
         if ($buyfeesquery) {
 
-            $buyfeesval = $this->_safe_math(" ( ( $amount * $buyfeesquery->fees)/100 ) ");
+            $buyfeesval = $this->_safe_math("  ( $amount * $buyfeesquery->fees)/100  ");
 
             if ($fees_balance >= $this->fees_balance_above) {
                 $buyfeesval = $this->_safe_math(" $buyfeesval * (100 - $this->fees_balance_discount) / 100 ");
@@ -484,7 +487,7 @@ class Buy extends Trade
             if ($buyfeesquery) {
                 $buyfeesval = $this->_safe_math(" ( $remaining_qty * $buyfeesquery->fees)/100 ");
                 if ($fees_balance >= $this->fees_balance_above) {
-                    $buyfeeval = $this->safemath(" $buyfeeval * (100 - $this->fees_balance_discount ) / 100 ");
+                    $buyfeeval = $this->_safe_math(" $buyfeeval * (100 - $this->fees_balance_discount ) / 100 ");
                 }
             } else {
                 $buyfeesval = 0;

@@ -26,4 +26,5 @@ interface PopulousWSSConstants
     public const EVENT_ORDER_UPDATED = 1;
     public const EVENT_COINPAIR_UPDATED = 2;
     public const EVENT_TRADE_CREATED = 3;
+    public const EVENT_MARKET_SUMMARY = 4;
 }

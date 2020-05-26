@@ -83,7 +83,7 @@ class PublicEvent extends PublicChannel
             $channels = [];
     
             $channels[$market_summary_channel] = [];
-            $channels[$market_summary_channel] = $summary;
+            $channels[$market_summary_channel][] = $summary;
 
             $this->_push_event_to_channels($channels);
         }
