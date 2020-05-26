@@ -88,7 +88,7 @@ class Trade extends Auth
 
     protected function _validate_decimals( $number, $decimals ){
 
-        $number = str($number);
+        $number = (string) $number;
 
         $l = (int) strlen(substr(strrchr($number, "."), 1));        
         if( $l <= $decimals ) return TRUE;
