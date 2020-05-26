@@ -62,9 +62,10 @@ class ServerHandler extends ServerBaseHandler
             case PopulousWSSConstants::EVENT_TRADE_CREATED:
                 $log_id = $data['log_id'];
                 $this->public_event->_event_trade_create($log_id);
-                $this->public_event->_event_24h_summary_update();
             break;
 
+            case PopulousWSSConstants::EVENT_MARKET_SUMMARY:
+                $this->public_event->_event_24h_summary_update();
             default:
                 
             break;

@@ -47,7 +47,7 @@ class Sell extends Trade
             $fees_amount = 0;
             $seller_receiving_amountAfterFees = $seller_receiving_amount;
             if ($fees_percent != 0) {
-                $fees_amount = $this->_safe_math(" ( ( $seller_receiving_amount  * $fees_percent ) / 100 ");
+                $fees_amount = $this->_safe_math("  ( $seller_receiving_amount  * $fees_percent ) / 100 ");
                 if ($seller_receiving_amount > 10000) {
                     $fees_amount = $this->_safe_math(" $fees_amount * (100 - $fees_balance_discount ) / 100");
                 }
@@ -145,6 +145,9 @@ class Sell extends Trade
                     ]
                 );
 
+                $this->wss_server->_event_push(
+                    PopulousWSSConstants::EVENT_MARKET_SUMMARY,[]
+                );
             } catch (Exception $e) {
 
             }
@@ -634,7 +637,7 @@ class Sell extends Trade
         $sellfeesval = 0;
 
         if ($sellfeesquery) {
-            $sellfeesval = $this->_safe_math(" ( ( $amount * $fees_percent )/100 ) ");
+            $sellfeesval = $this->_safe_math(" ( $amount * $fees_percent )/100 ");
             if ($fees_balance >= $this->fees_balance_above) {
                 $sellfreesval = $this->_safe_math(" $sellfreesval * (100 - $this->fees_balance_discount ) / 100");
             }
