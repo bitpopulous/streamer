@@ -146,7 +146,7 @@ class PublicEvent extends PublicChannel
 
             unset($biding_log['user_id'], $biding_log['fees_amount'], $biding_log['available_amount']);
 
-            $biding_log['time'] = (int) strtotime(date('Y/m/d H:i', strtotime($biding_log['success_time'])));
+            $biding_log['time'] = (int) strtotime(date('Y/m/d H:i:s', strtotime($biding_log['success_time'])));            
             $biding_log['time_ms'] = (int) $biding_log['time'] * 1000;
 
             unset($biding_log['success_time']);
