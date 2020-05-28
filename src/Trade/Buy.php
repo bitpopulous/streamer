@@ -25,18 +25,48 @@ class Buy extends Trade
             $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coin_id);
             $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coin_id);
 
-            $trade_qty = $this->_safe_math(" LEAST( $selltrade->bid_qty_available, $buytrade->bid_qty_available ) ");
+            $ps_decimals = $this->CI->WsServer_model->_get_decimals_of_coin($coin_id);
+
+            if( $ps_decimals['fetch'] == false ) return FALSE;
+
+            $primary_coin_decimal   = $ps_decimals['primary_decimals'];
+            $secondary_coin_decimal = $ps_decimals['secondary_decimals'];
+
+            $calcQuery = "SELECT t.*, (SELECT( CAST(  t.trade_qty * t.trade_price  as DECIMAL( 24, $secondary_coin_decimal ) )  ) ) as trade_amount  
+                          from ( SELECT LEAST( $selltrade->bid_qty_available, $buytrade->bid_qty_available ) as trade_qty, LEAST(  $selltrade->bid_price, $buytrade->bid_price  ) as trade_price ) as t";
+
+            $calcResult     = $this->CI->WsServer_model->dbQuery( $calcQuery );
+
+            if( $calcResult == null ){
+                return false;
+            }
+
+            $calcResult = $calcResult->row();
+            
+            $trade_qty      = $calcResult->trade_qty;
+            $trade_price    = $calcResult->trade_price;
+            $trade_amount   = $calcResult->trade_amount;
+
+            /**
+             * 
+             * BUYER will PAY $trade_amount & GET $trade_qty
+             * SELLET will PAY $trade_qty & GET $trade_amount
+             */
 
             // BUYER AND SELLER BALANCE UPDATE HERE
 
             $buyer_receiving_amount = $trade_qty;
-            $seller_will_pay = $trade_qty;
+            $seller_will_pay        = $trade_qty;
 
-            $seller_receiving_amount = $this->_safe_math(" $trade_qty * $selltrade->bid_price ");
-            $buyer_will_pay = $this->_safe_math(" $trade_qty * $buytrade->bid_price ");
+            $seller_receiving_amount = $trade_amount; //$this->_safe_math(" $trade_qty * $trade_price ");
+            $buyer_will_pay          = $trade_amount ;//$this->_safe_math(" $trade_qty * $trade_price ");
 
-            // We don't have maker fees
-            // We only charging fees whoever clearing the order book
+
+            /**
+             * FEES Deduction
+             */
+            // We don't have maker fees (only charging fees whoever clearing the order book)
+            // We only charge buyer here
 
             $buyfeesquery = $this->CI->WsServer_model->get_fees_by_coin_id('BUY', $primary_coin_id);
 
@@ -71,27 +101,31 @@ class Buy extends Trade
             $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount);
 
             // Credit fees to exchange account
-            $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $fees_amount);
+            if( $fees_amount > 0 ){
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $fees_amount);
+            }
 
-            $buyerAvailableBidAmountAfterTrade = $this->_safe_math(" $buytrade->amount_available  - ($trade_qty * $buytrade->bid_price ) ");
-            $sellerAvailableBidAmountAfterTrade = $this->_safe_math(" $selltrade->amount_available  - ( $trade_qty * $selltrade->bid_price ) ");
+            $calcQuery = " SELECT 
+                ( $buytrade->amount_available  - $trade_amount ) as buyer_av_bid_amount_after_trade,
+                ( $selltrade->amount_available  - $trade_amount ) as seller_av_bid_amount_after_trade,
+                ( $buytrade->bid_qty_available - $trade_qty ) as buyer_av_qty_after_trade,
+                ( $selltrade->bid_qty_available - $trade_qty ) as seller_av_qty_after_trade,
+                ( ($buytrade->bid_qty_available - $trade_qty) <= 0 ) as is_buyer_qty_fulfilled,
+                ( ( $selltrade->bid_qty_available - $trade_qty ) <= 0  ) as is_seller_qty_fulfilled
+            ";
 
-            $buyerAvailableQtyAfterTrade = $this->_safe_math(" $buytrade->bid_qty_available - $trade_qty ");
-            $sellerAvailableQtyAfterTrade = $this->_safe_math(" $selltrade->bid_qty_available - $trade_qty ");
-
-            $isBuyerQtyFulfilled = $this->_safe_math_condition_check("  $buyerAvailableQtyAfterTrade <= 0   ");
-            $isSellerQtyFulfilled = $this->_safe_math_condition_check("  $sellerAvailableQtyAfterTrade <= 0  ");
+            $calcResult     = $this->CI->WsServer_model->dbQuery( $calcQuery )->row();
 
             $buyupdate = array(
-                'bid_qty_available' => $buyerAvailableQtyAfterTrade,
-                'amount_available' => $buyerAvailableBidAmountAfterTrade,
-                'status' => $isBuyerQtyFulfilled ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
+                'bid_qty_available' => $calcResult->buyer_av_qty_after_trade ,
+                'amount_available' => $calcResult->buyer_av_bid_amount_after_trade,
+                'status' => $calcResult->is_buyer_qty_fulfilled == '1' ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
             $sellupdate = array(
-                'bid_qty_available' => $sellerAvailableQtyAfterTrade,
-                'amount_available' => $sellerAvailableBidAmountAfterTrade,
-                'status' => $isSellerQtyFulfilled ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
+                'bid_qty_available' => $calcResult->seller_av_qty_after_trade,
+                'amount_available' => $calcResult->seller_av_bid_amount_after_trade,
+                'status' => $calcResult->is_seller_qty_fulfilled == '1' ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
             // DASH_USD
@@ -102,18 +136,18 @@ class Buy extends Trade
                 'bid_id' => $buytrade->id,
                 'bid_type' => $buytrade->bid_type,
                 'complete_qty' => $trade_qty,
-                'bid_price' => $buytrade->bid_price,
+                'bid_price' => $trade_price,
                 'complete_amount' => $buyer_will_pay,
                 'user_id' => $buytrade->user_id,
                 'coinpair_id' => $buytrade->coinpair_id,
                 'success_time' => $success_datetime,
                 'fees_amount' => $fees_amount,
-                'available_amount' => $buyerAvailableBidAmountAfterTrade,
-                'status' => $this->_safe_math_condition_check("( $buyerAvailableBidAmountAfterTrade <= 0 ) ") ?
+                'available_amount' => $calcResult->buyer_av_qty_after_trade,
+                'status' => $calcResult->is_buyer_qty_fulfilled ?
                 PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
             // Update coin history
-            $this->CI->WsServer_model->update_coin_history($coin_id, $trade_qty, $buytrade->bid_price);
+            // $this->CI->WsServer_model->update_coin_history($coin_id, $trade_qty, $trade_price);
 
             $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
             $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
@@ -124,7 +158,7 @@ class Buy extends Trade
             $this->CI->WsServer_model->update_stop_limit_status($coin_id);
 
             // Updating Current minute OHLCV
-            $this->CI->WsServer_model->update_current_minute_OHLCV( $buytrade->coinpair_id, $buytrade->bid_price, $trade_qty, $success_datetimestamp );            
+            $this->CI->WsServer_model->update_current_minute_OHLCV( $coin_id, $trade_price, $trade_qty, $success_datetimestamp );            
             /**
              * =================
              * EVENTS
