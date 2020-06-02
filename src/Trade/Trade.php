@@ -4,8 +4,10 @@ namespace PopulousWSS\Trade;
 
 use PopulousWSS\Common\Auth;
 
-class Trade extends Auth
+class Trade
 {
+    use Auth;
+    
     protected $CI;
 
     protected $fees_balance_of;

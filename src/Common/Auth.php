@@ -2,7 +2,7 @@
 
 namespace PopulousWSS\Common;
 
-class Auth
+trait Auth
 {
     /**
      * @return bool

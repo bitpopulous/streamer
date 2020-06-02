@@ -73,6 +73,10 @@ class ServerHandler extends ServerBaseHandler
         
     }
 
+    private function send_safe(ConnectionContract $recv, string $data) {
+        $recv->send($data);
+    }
+
     private function _reply_msg(ConnectionContract $recv, string $event, string $channel, array $rData)
     {
         if ($event == 'orderbook-init') {
@@ -84,8 +88,8 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->CI->WsServer_model->get_orders($coin_id, 40),
             ];
-
-            $recv->send(json_encode($data_send));
+            
+            $this->send_safe($recv, json_encode($data_send));
             
         } else if ($event == 'exchange-buy') {
 
@@ -104,7 +108,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->buy->_limit($coin_id, $amount, $price, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
 
             } else if ($trade_type == 'market') {
 
@@ -116,7 +120,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->buy->_market($coin_id, $amount, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
                 
             } else if ($trade_type == 'stop_limit') {
 
@@ -130,7 +134,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->buy->_stop_limit($coin_id, $amount, $stop, $limit, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
 
             }
             return;
@@ -151,7 +155,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->sell->_limit($coin_id, $amount, $price, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
 
             } else if ($trade_type == 'market') {
 
@@ -163,7 +167,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->sell->_market($coin_id, $amount, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
                 
             } else if ($trade_type == 'stop_limit') {
 
@@ -177,7 +181,7 @@ class ServerHandler extends ServerBaseHandler
                     'data' => $this->sell->_stop_limit($coin_id, $amount, $stop, $limit, $auth),
                 ];
 
-                $recv->send(json_encode($data_send));
+                $this->send_safe($recv, json_encode($data_send));
 
             }
             return;
@@ -193,20 +197,19 @@ class ServerHandler extends ServerBaseHandler
                 'data' => $this->buy->cancel_order($order_id, $auth, $rData),
             ];
 
-            $recv->send(json_encode($data_send));
+            $this->send_safe($recv, json_encode($data_send));
 
         } else if ($event == 'exchange-init') {
 
             $market = $rData['market'];
             $coin_id = $this->CI->WsServer_model->get_coin_id_from_symbol($market);
             $ua = $rData['ua'];
-            
             $data_send = [
                 'event' => $event,
                 'channel' => $channel,
                 'data' => $this->private_event->_prepare_exchange_init_data($coin_id, $ua),
             ];
-            $recv->send(json_encode($data_send));
+            $this->send_safe($recv, json_encode($data_send));
 
         } else if ($event == 'exchange-init-guest') {
             
@@ -218,7 +221,7 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->public_event->_prepare_exchange_init_data($coin_id),
             ];
-            $recv->send(json_encode($data_send));
+            $this->send_safe($recv, json_encode($data_send));
             
         } else if ( $event == 'market-init-24h-summary' ) {
                         
@@ -227,7 +230,7 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->public_event->get_24_hour_summary(),
             ];
-            $recv->send(json_encode($data_send));
+            $this->send_safe($recv, json_encode($data_send));
             
         } else if ($event == 'api-setting-init') {
 
@@ -237,7 +240,8 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->CI->WsServer_model->get_api_keys($user_id)
             ];
-            $recv->send(json_encode($arr_return));
+
+            $this->send_safe($recv, json_encode($arr_return));
 
         } else if ($event == 'api-setting-create') {
 
@@ -251,7 +255,7 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->CI->WsServer_model->create_api_key($user_id, $api_name, $ga_token)
             ];
-            $recv->send(json_encode($arr_return));
+            $this->send_safe($recv, json_encode($arr_return));
 
         } else if ($event == 'api-setting-update') {
 
@@ -266,7 +270,7 @@ class ServerHandler extends ServerBaseHandler
                 'data' => $this->CI->WsServer_model->update_api_key($user_id, $api_id, $ga_token, $ip_addr, $rData),
             ];
 
-            $recv->send(json_encode($arr_return));
+            $this->send_safe($recv, json_encode($arr_return));
 
         } else if ($event == 'api-setting-delete') {
 
@@ -280,7 +284,7 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->CI->WsServer_model->delete_api_key($user_id, $api_id, $ga_token, $ip_addr)
             ];
-            $recv->send(json_encode($arr_return));
+            $this->send_safe($recv, json_encode($arr_return));
             
         }
     }

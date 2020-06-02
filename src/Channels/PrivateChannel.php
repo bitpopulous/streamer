@@ -3,48 +3,14 @@
 namespace PopulousWSS\Channels;
 
 use PopulousWSS\Common\Auth;
-use PopulousWSS\common\PopulousWSSConstants;
-use WSSC\Contracts\ConnectionContract;
+use PopulousWSS\ServerHandler;
 
-class PrivateChannel extends Auth
+class PrivateChannel extends PublicChannel
 {
-    public $channels;
-    protected $CI;
+    use Auth;
 
-    public function __construct()
+    public function __construct(ServerHandler $server)
     {
-        $this->channels = [];
-        $this->CI = &get_instance();
-
-        $this->CI->load->model([
-            'WsServer_model',
-        ]);
-    }
-    
-    /**
-     * @return bool
-     */
-    public function _subscribe(ConnectionContract $recv, string $channel, string $auth): bool
-    {
-        if (!$this->_authenticate($channel, $auth)) {
-            return false;
-        }
-        if (!isset($this->channels[$channel])){
-            $this->channels[$channel] = [];
-        }
-        $socketId = $recv->getUniqueSocketId();
-        $this->channels[$channel][] = $socketId;
-
-        return $this->_subscribe_succeed($recv, $channel);
-    }
-
-    public function _subscribe_succeed(ConnectionContract $recv, string $channel): bool {
-        $d = [];
-        $d['event'] = PopulousWSSConstants::SUBSCRIBE_SUCCESS;
-        $d['channel'] = $channel;
-        $d['data'] = [];
-        
-        $recv->send(json_encode($d));
-        return true;
+        parent::__construct($server);
     }
 }
