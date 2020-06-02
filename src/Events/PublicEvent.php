@@ -6,34 +6,11 @@ use PopulousWSS\ServerHandler;
 
 class PublicEvent extends PublicChannel
 {
-    private $wss_server;
-
     public function __construct(ServerHandler $server)
     {
-        parent::__construct();
-        $this->wss_server = $server;
+        parent::__construct($server);
     }
 
-    /**
-     * @return bool
-     */
-    public function _publish_message(string $event, string $channel, string $message): bool
-    {
-        if (isset($this->channels[$channel])) {
-
-            $subscribers = $this->channels[$channel];
-            $clients = $this->wss_server->_get_clients();
-            foreach ($subscribers as $s) {
-                if (isset($clients[$s])) {
-                    $clients[$s]->send($message);
-                }
-            }
-            return true;
-        } else {
-            // $this->log->debug("No subscribers found for channel : $channel ");
-            return false;
-        }
-    }
 
     public function _event_coinpair_update(int $coin_id)
     {
@@ -87,28 +64,6 @@ class PublicEvent extends PublicChannel
 
             $this->_push_event_to_channels($channels);
         }
-    }
-
-    public function _push_event_to_channels(array $channels)
-    {
-        foreach ($channels as $channel => $eventData) {
-            foreach ($eventData as $e) {
-                $this->_send_to_subscribers($e['event'], $channel, (array) $e['data']);
-            }
-        }
-    }
-
-    public function _send_to_subscribers(string $event, string $channel, array $message): bool
-    {
-        //prepare data
-        $d = [
-            'event' => $event,
-            'channel' => $channel,
-            'data' => $message,
-        ];
-        $messageTxt = json_encode($d);
-
-        return $this->_publish_message($event, $channel, $messageTxt);
     }
 
     private function _prepare_order_book($coin_id)
