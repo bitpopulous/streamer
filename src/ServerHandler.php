@@ -5,6 +5,7 @@ use PopulousWSS\Common\PopulousWSSConstants;
 use PopulousWSS\Events\PrivateEvent;
 use PopulousWSS\Events\PublicEvent;
 use PopulousWSS\ServerBaseHandler;
+use PopulousWSS\Trade\Trade;
 use PopulousWSS\Trade\Buy;
 use PopulousWSS\Trade\Sell;
 use WSSC\Contracts\ConnectionContract;
@@ -16,6 +17,7 @@ class ServerHandler extends ServerBaseHandler
 
     protected $buy;
     protected $sell;
+    protected $trade;
 
     public function __construct()
     {
@@ -24,6 +26,7 @@ class ServerHandler extends ServerBaseHandler
         $this->private_event = new PrivateEvent($this);
         $this->buy = new Buy($this);
         $this->sell = new Sell($this);
+        $this->trade = new Trade($this);
     }
     
     public function _event_handler(ConnectionContract $recv, string $channel, string $event, array $data)
@@ -88,7 +91,7 @@ class ServerHandler extends ServerBaseHandler
                 'channel' => $channel,
                 'data' => $this->CI->WsServer_model->get_orders($coin_id, 40),
             ];
-            
+
             $this->send_safe($recv, json_encode($data_send));
             
         } else if ($event == 'exchange-buy') {
@@ -194,7 +197,7 @@ class ServerHandler extends ServerBaseHandler
             $data_send = [
                 'event' => $event,
                 'channel' => $channel,
-                'data' => $this->buy->cancel_order($order_id, $auth, $rData),
+                'data' => $this->trade->cancel_order($order_id, $auth, $rData),
             ];
 
             $this->send_safe($recv, json_encode($data_send));
