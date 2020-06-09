@@ -133,7 +133,7 @@ class Sell extends Trade
                 'coinpair_id' => $coinpair_id,
                 'success_time' => $success_datetime,
                 'fees_amount' => $sellerTotalFees,
-                'available_amount' => $calcQuery->seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
+                'available_amount' => $calcResult->seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
                 'status' => $calcResult->is_seller_qty_fulfilled ?
                 PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
