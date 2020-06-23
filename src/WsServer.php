@@ -11,7 +11,7 @@ use PopulousWSS\WebSocketServer;
 use PopulousWSS\ServerHandler;
 
 /**
- * Create by PopulusWorld Ltd
+ * Create by Populous World Ltd
  *
  * @property ServerConfig config
  * @property WebSocket handler
