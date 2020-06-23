@@ -15,7 +15,7 @@ use WSSC\Exceptions\ConnectionException;
 use WSSC\Exceptions\WebSocketException;
 
 /**
- * Create by Arthur Kushman
+ * Create by Populous World Ltd
  *
  * @property ServerConfig config
  * @property WebSocket handler
