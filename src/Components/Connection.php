@@ -7,6 +7,7 @@ use Monolog\Logger;
 use WSSC\Contracts\CommonsContract;
 use WSSC\Contracts\ConnectionContract;
 use WSSC\Contracts\WebSocketServerContract;
+use WSSC\Exceptions\WebSocketException;
 
 class Connection implements ConnectionContract, CommonsContract
 {
@@ -51,8 +52,17 @@ class Connection implements ConnectionContract, CommonsContract
      */
     public function send(string $data): void
     {
-        if ($this->getPeerName() != "") {
-            fwrite($this->socketConnection, $this->encode($data));
+        try {
+            if ($this->getPeerName() != "") {
+                fwrite($this->socketConnection, $this->encode($data));
+            } else {
+                if (is_resource($this->socketConnection)) {
+                    @fwrite($this->socketConnection, $this->encode('', self::EVENT_TYPE_CLOSE));
+                    fclose($this->socketConnection);
+                }
+            }
+        } catch (WebSocketException $e) {
+            $e->printStack();
         }
     }
 
@@ -220,6 +230,9 @@ class Connection implements ConnectionContract, CommonsContract
      */
     public function getPeerName(): string
     {
-        return stream_socket_get_name($this->socketConnection, true);
+        if (is_resource($this->socketConnection)) {
+            return stream_socket_get_name($this->socketConnection, true);
+        }
+        return false;
     }
 }
