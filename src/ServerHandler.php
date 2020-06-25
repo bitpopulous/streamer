@@ -77,6 +77,12 @@ class ServerHandler extends ServerBaseHandler
     }
 
     private function send_safe(ConnectionContract $recv, string $data) {
+        foreach ($this->clients as $client) {
+            if ($client->getPeerName() == null) {
+                $this->log->debug(json_encode($client));
+                $this->onClose($client);
+            }
+        }
         $recv->send($data);
     }
 

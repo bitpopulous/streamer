@@ -2,14 +2,16 @@
 
 namespace PopulousWSS;
 
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
 use WSSC\Components\ClientConfig;
 use WSSC\Components\ServerConfig;
 use WSSC\WebSocketClient;
-use WSSC\WebSocketServer;
+use PopulousWSS\WebSocketServer;
 use PopulousWSS\ServerHandler;
 
 /**
- * Create by PopulusWorld Ltd
+ * Create by Populous World Ltd
  *
  * @property ServerConfig config
  * @property WebSocket handler
@@ -19,6 +21,7 @@ class WsServer /*extends WssMain implements WebSocketServerContract */
     private $ip;
     private $port;
     private $allowed;
+    private $log;
 
     /**
      * WsServer constructor.
@@ -28,6 +31,9 @@ class WsServer /*extends WssMain implements WebSocketServerContract */
         $this->ip = getenv('WEBSOCKET_IP');
         $this->port = getenv('WEBSOCKET_PORT');
         $this->allowed = getenv('WEBSOCKET_ORIGIN_ALLOWED');
+
+        $this->log = new Logger('ServerSocket');
+        $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
     }
 
     /**

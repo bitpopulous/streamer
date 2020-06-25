@@ -4,7 +4,7 @@ namespace PopulousWSS\Common;
 
 /**
  *
- * @author Remi Besnard
+ * @author Populous World Ltd
  */
 interface PopulousWSSConstants
 {
