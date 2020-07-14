@@ -117,6 +117,9 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     private function looping($server)
     {
         while (true) {
+            // check any connection timeout or not if it's timeout then close from here as well.
+            $this->clearTimedoutRes($this->clients);
+
             $this->totalClients = count($this->clients) + 1;
 
             // maxClients prevents process fork on count down
@@ -330,6 +333,27 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
                 // clear the declaration of parsed param
                 unset($this->handler->pathParams[array_search($param, $this->handler->pathParams, false)]);
                 $left = substr($left, strpos($left, '/', 1));
+            }
+        }
+    }
+
+    private function clearTimedoutRes(array &$clients)
+    {
+        foreach ($clients as $kSock => $sock) {
+            $data = $this->decode(fread($sock, self::MAX_BYTES_READ));
+            // to manipulate connection through send/close methods via handler, specified in IConnection
+            $this->cureentConn = new Connection($sock, $clients);
+            if (empty($data)) { // close event triggered from client - browser tab or close socket event
+                // trigger CLOSE event
+                try {
+                    $this->handler->onClose($this->cureentConn);
+                } catch (WebSocketException $e) {
+                    $e->printStack();
+                }
+
+                // to avoid event leaks
+                unset($this->clients[array_search($sock, $clients)], $clients[$kSock]);
+                continue;
             }
         }
     }
