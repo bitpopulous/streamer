@@ -342,11 +342,11 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         foreach ($clients as $kSock => $sock) {
             $data = $this->decode(fread($sock, self::MAX_BYTES_READ));
             // to manipulate connection through send/close methods via handler, specified in IConnection
-            $this->cureentConn = new Connection($sock, $clients);
+            $cureentConn = new Connection($sock, $clients);
             if (empty($data)) { // close event triggered from client - browser tab or close socket event
                 // trigger CLOSE event
                 try {
-                    $this->handler->onClose($this->cureentConn);
+                    $this->handler->onClose($cureentConn);
                 } catch (WebSocketException $e) {
                     $e->printStack();
                 }
