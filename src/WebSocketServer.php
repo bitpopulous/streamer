@@ -117,8 +117,19 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     private function looping($server)
     {
         while (true) {
-            // check any connection timeout or not if it's timeout then close from here as well.
-            $this->clearTimedoutRes($this->clients);
+            //prepare readable sockets
+            $readSocks = $this->clients;
+            $readSocks[] = $server;
+            $this->cleanSocketResources($readSocks);
+
+            //start reading and use a large timeout
+            if (!stream_select($readSocks, $write, $except, $this->config->getStreamSelectTimeout())) {
+                // check any connection timeout or not if it's timeout then close from here as well.
+                $this->log->debug("Socket Timeout: ". $this->config->getStreamSelectTimeout());
+                $this->clearTimedoutRes($this->clients);
+//                throw new WebSocketException('something went wrong while selecting',
+//                    CommonsContract::SERVER_SELECT_ERROR);
+            }
 
             $this->totalClients = count($this->clients) + 1;
 
@@ -137,17 +148,6 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
                 $this->eventLoop($server, true);
             }
             $this->lessConnThanProc($this->totalClients, $this->maxClients);
-
-            //prepare readable sockets
-            $readSocks = $this->clients;
-            $readSocks[] = $server;
-            $this->cleanSocketResources($readSocks);
-
-            //start reading and use a large timeout
-            if (!stream_select($readSocks, $write, $except, $this->config->getStreamSelectTimeout())) {
-                throw new WebSocketException('something went wrong while selecting',
-                    CommonsContract::SERVER_SELECT_ERROR);
-            }
 
             //new client
             if (in_array($server, $readSocks, false)) {

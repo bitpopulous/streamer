@@ -60,7 +60,7 @@ class WsServer /*extends WssMain implements WebSocketServerContract */
         }
 
         $config->setClientsPerFork(2500);
-        $config->setStreamSelectTimeout(2 * 3600);
+        $config->setStreamSelectTimeout(3600); // 2 * 3600
         $wsServer = new WebSocketServer(new ServerHandler(), $config);
         echo "Server is listening on port $this->port.\n";
         $wsServer->run();
