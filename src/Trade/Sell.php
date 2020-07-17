@@ -289,8 +289,8 @@ class Sell extends Trade
             $maker_amount = $this->_safe_math(" $maker_qty * $price  ");
             $taker_amount = $this->_safe_math(" $taker_qty * $price  ");
 
-            $makerFeesPercent =  $this->_getMakerFees( $this->user_id, $coinId );
-            $takerFeesPercent =  $this->_getTakerFees( $this->user_id, $coinId );
+            $makerFeesPercent =  $this->_getMakerFees( $this->user_id, $coinpairId );
+            $takerFeesPercent =  $this->_getTakerFees( $this->user_id, $coinpairId );
 
             $makerFees = $this->_calculateFeesAmount( $maker_amount, $makerFeesPercent );
             $takerFees = $this->_calculateFeesAmount( $taker_amount, $takerFeesPercent );
