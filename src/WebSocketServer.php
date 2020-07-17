@@ -42,6 +42,9 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
     private $log;
 
+    private $clientIps = [];
+    private $maxClientsReqs = 20;
+
     /**
      * WebSocketServer constructor.
      *
@@ -58,6 +61,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         $this->handler = $handler;
         $this->config = $config;
         $this->setIsPcntlLoaded(extension_loaded('pcntl'));
+        $this->maxClientsReqs = (getenv('SAME_IP_CONNECT_LIMIT')) ? getenv('SAME_IP_CONNECT_LIMIT') : $this->maxClientsReqs;
 
         $this->log = new Logger('ServerSocket');
         $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
@@ -171,26 +175,42 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     {
         $newClient = stream_socket_accept($server, 0); // must be 0 to non-block
         if ($newClient) {
+            $validRequest = true;
+
             // important to read from headers here coz later client will change and there will be only msgs on pipe
             $headers = fread($newClient, self::HEADER_BYTES_READ);
-            if ($this->config->isCheckOrigin()) {
-                $hasOrigin = (new OriginComponent($this->config, $newClient))->checkOrigin($headers);
-                $this->config->setOriginHeader($hasOrigin);
-                if ($hasOrigin === false) {
-                    return;
+            $client_ip = current($this->getXForwardedFor($headers));
+
+            if ($client_ip) {
+                $this->clientIps[] = $client_ip;
+                $requested_ip_list = array_count_values($this->clientIps);
+
+                if($requested_ip_list[$client_ip] > $this->maxClientsReqs) {
+                    $this->log->debug("Request from $client_ip more than $this->maxClientsReqs");
+                    $validRequest = false;
                 }
             }
 
-            if (empty($this->handler->pathParams[0]) === false) {
-                $this->setPathParams($headers);
+            if ($validRequest) {
+                if ($this->config->isCheckOrigin()) {
+                    $hasOrigin = (new OriginComponent($this->config, $newClient))->checkOrigin($headers);
+                    $this->config->setOriginHeader($hasOrigin);
+                    if ($hasOrigin === false) {
+                        return;
+                    }
+                }
+
+                if (empty($this->handler->pathParams[0]) === false) {
+                    $this->setPathParams($headers);
+                }
+
+                $this->clients[] = $newClient;
+                $this->stepRecursion = true; // set on new client - remainder % is always 0
+
+                // trigger OPEN event
+                $this->handler->onOpen(new Connection($newClient, $this->clients));
+                $this->handshake($newClient, $headers);
             }
-
-            $this->clients[] = $newClient;
-            $this->stepRecursion = true; // set on new client - remainder % is always 0
-
-            // trigger OPEN event
-            $this->handler->onOpen(new Connection($newClient, $this->clients));
-            $this->handshake($newClient, $headers);
         }
 
         //delete the server socket from the read sockets
@@ -356,5 +376,29 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
                 continue;
             }
         }
+    }
+
+    /**
+     * Get IP Addresses
+     * @param string $headers
+     * @return Array
+     */
+    private function getXForwardedFor(string $headers){
+        $re = '/X-Forwarded-For\:\s(.\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}[,]?)+/';
+        preg_match($re, $headers, $matches, PREG_OFFSET_CAPTURE, 0);
+
+        // Print the entire match result
+        if (empty($matches[0]) || empty($matches[0][0])) {
+            // $this->sendAndClose('No IP Detected.');
+            return false;
+        } else {
+            $xForwardedFor = str_replace('X-Forwarded-For:','',$matches[0][0] );
+            $xForwardedFor = explode(",", $xForwardedFor);
+
+            foreach( $xForwardedFor as &$a ) $a = trim($a);
+
+            return $xForwardedFor;
+        }
+        return false;
     }
 }
