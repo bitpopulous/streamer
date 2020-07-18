@@ -43,7 +43,9 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     private $log;
 
     private $clientIps = [];
+    private $clientIpWithTime = [];
     private $maxClientsReqs = 20;
+    private $maxClientsReqsBlockTime = 60;
 
     /**
      * WebSocketServer constructor.
@@ -62,6 +64,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         $this->config = $config;
         $this->setIsPcntlLoaded(extension_loaded('pcntl'));
         $this->maxClientsReqs = (getenv('SAME_IP_CONNECT_LIMIT')) ? getenv('SAME_IP_CONNECT_LIMIT') : $this->maxClientsReqs;
+        $this->maxClientsReqsBlockTime = (getenv('SAME_IP_CONNECT_LIMIT_TIME')) ? getenv('SAME_IP_CONNECT_LIMIT_TIME') : $this->maxClientsReqsBlockTime;
 
         $this->log = new Logger('ServerSocket');
         $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
@@ -183,11 +186,26 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
             if ($client_ip) {
                 $this->clientIps[] = $client_ip;
-                $requested_ip_list = array_count_values($this->clientIps);
+                $this->clientIpWithTime[][$client_ip] = date('Y-m-d H:i:s');
 
+                $requested_ip_list = array_count_values($this->clientIps);
                 if($requested_ip_list[$client_ip] > $this->maxClientsReqs) {
-                    $this->log->debug("Request from $client_ip more than $this->maxClientsReqs");
                     $validRequest = false;
+                    $this->log->debug("Request from $client_ip more than $this->maxClientsReqs");
+
+                    $alltimesForSpecificIp = array_column($this->clientIpWithTime, $client_ip);
+                    $minutes = (strtotime(date('Y-m-d H:i:s')) - strtotime(current($alltimesForSpecificIp))) / 60;
+                    $minutes = ($minutes < 0) ? 0 : (int) abs($minutes);
+
+                    $this->log->debug("Client IP: $client_ip, Minutes: $minutes, Max Block Time: $this->maxClientsReqsBlockTime");
+                    if ($minutes >= $this->maxClientsReqsBlockTime) {
+                        $this->clientIps = array_diff($this->clientIps,[$client_ip]);
+                        foreach ($this->clientIpWithTime as $key => $val) {
+                            if (count(@$val[$client_ip]) > 0) {
+                                unset($this->clientIpWithTime[$key]);
+                            }
+                        }
+                    }
                 }
             }
 
