@@ -18,6 +18,8 @@ class Trade
     protected $wss_server;
     protected $user_id;
 
+    public $DM;
+
     public function __construct( ServerHandler $server )
     {
         $this->CI = &get_instance();
@@ -26,6 +28,10 @@ class Trade
         $this->CI->load->model([
             'WsServer_model',
         ]);
+
+        $this->CI->load->library("PopDecimalMath",null,'decimalmaths');
+
+        $this->DM =& $this->CI->decimalmaths;
     }
     
 
@@ -71,17 +77,20 @@ class Trade
     
     protected function _validate_primary_value_decimals($number, $decimals)
     {
-        $primary_max = $this->CI->WsServer_model->max_value($decimals);
-        $primary_min = $this->CI->WsServer_model->min_value($decimals);
-        return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
+        // $primary_max = $this->CI->WsServer_model->max_value($decimals);
+        // $primary_min = $this->CI->WsServer_model->min_value($decimals);
+
+        // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
+        return $this->_validate_decimals( $number, $decimals );
     }
 
     protected function _validate_secondary_value_decimals($number, $decimals)
     {
-        $secondary_max = $this->CI->WsServer_model->max_value($decimals);
-        $secondary_min = $this->CI->WsServer_model->min_value($decimals);
+        // $secondary_max = $this->CI->WsServer_model->max_value($decimals);
+        // $secondary_min = $this->CI->WsServer_model->min_value($decimals);
 
-        return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
+        // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
+        return $this->_validate_decimals( $number, $decimals ) ;
     }
 
     protected function _validate_decimals( $number, $decimals ){
@@ -132,8 +141,8 @@ class Trade
                     $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
                     $refund_amount = $orderdata->bid_qty_available;
                 } else {
-                    $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
-                    $refund_amount = $this->_safe_math(" ($orderdata->bid_qty_available * $orderdata->bid_price) ");
+                    $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);                    
+                    $refund_amount = $this->DM->safe_multiplication ([ $orderdata->bid_qty_available , $orderdata->bid_price]);
                 }
     
                 $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
