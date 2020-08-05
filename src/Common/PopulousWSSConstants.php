@@ -22,6 +22,7 @@ interface PopulousWSSConstants
     public const BID_COMPLETE_STATUS = 1;
     public const BID_CANCELLED_STATUS = 2;
     public const BID_QUEUED_STATUS = 3;
+    public const BID_FAILED_STATUS = 4;
 
     public const EVENT_ORDER_UPDATED = 1;
     public const EVENT_COINPAIR_UPDATED = 2;

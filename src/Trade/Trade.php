@@ -19,6 +19,7 @@ class Trade
     protected $user_id;
 
     public $DM;
+    public $DB;
 
     public function __construct( ServerHandler $server )
     {
@@ -32,6 +33,7 @@ class Trade
         $this->CI->load->library("PopDecimalMath",null,'decimalmaths');
 
         $this->DM =& $this->CI->decimalmaths;
+        $this->DB = $this->CI->db;
     }
     
 
