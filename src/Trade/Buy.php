@@ -301,25 +301,58 @@ class Buy extends Trade
                         'user_id' => $this->user_id,
                     ]
                 );
+                // Transation start
+                $this->DB->trans_start();
+                try {
+                    $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
-                $buytrade = $this->CI->WsServer_model->get_order($last_id);
+                    $this->CI->WsServer_model->get_credit_hold_balance_from_balance($buytrade->user_id, $secondary_coin_id, $totalAmount);
 
-                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($buytrade->user_id, $secondary_coin_id, $totalAmount);
+                    $sellers = $this->CI->WsServer_model->get_sellers($price, $coinpair_id);
 
-                $sellers = $this->CI->WsServer_model->get_sellers($price, $coinpair_id);
+                    if ($sellers) {
 
-                if ($sellers) {
+                        // BUYER  : P_UP S_DN
+                        // SELLER : P_DN S_UP
+                        foreach ($sellers as $key => $selltrade) {
 
-                    // BUYER  : P_UP S_DN
-                    // SELLER : P_DN S_UP
-                    foreach ($sellers as $key => $selltrade) {
+                            $buytrade = $this->CI->WsServer_model->get_order($last_id);
+                            $this->_do_buy_trade($buytrade, $selltrade);
+                        }
 
-                        $buytrade = $this->CI->WsServer_model->get_order($last_id);
-                        $this->_do_buy_trade($buytrade, $selltrade);
+                    } // Salesquery ends here
+
+                    // Transation end
+                    $this->DB->trans_complete();
+
+                    $trans_status = $this->DB->trans_status();
+
+                    if ($trans_status == FALSE) {
+                        $this->DB->trans_rollback();
+
+                        $tadata = array(
+                            'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                        );
+                        $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                        $data['isSuccess'] = false;
+                        $data['message'] = 'Something went wrong.';
+                        return $data;
+                    } else {
+                        $this->DB->trans_commit();
                     }
+                } catch (Exception $e) {
+                    $this->DB->trans_rollback();
 
-                } // Salesquery ends here
+                    $tadata = array(
+                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                    );
+                    $this->CI->WsServer_model->update_order($last_id, $tadata);
 
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Something went wrong.';
+                    return $data;
+                }
 
                 // Send event to every client
                 $this->wss_server->_event_push(
@@ -481,14 +514,47 @@ class Buy extends Trade
             );
 
             if ($last_id) {
+                // Transation start
+                $this->DB->trans_start();
+                try {
+                    $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
-                $buytrade = $this->CI->WsServer_model->get_order($last_id);
+                    // BUYER : HOLD SECONDARY COIN
+                    $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
-                // BUYER : HOLD SECONDARY COIN
-                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
+                    $this->_do_buy_trade($buytrade, $selltrade);
 
-                $this->_do_buy_trade($buytrade, $selltrade);
+                    // Transation end
+                    $this->DB->trans_complete();
 
+                    $trans_status = $this->DB->trans_status();
+
+                    if ($trans_status == FALSE) {
+                        $this->DB->trans_rollback();
+
+                        $tadata = array(
+                            'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                        );
+                        $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                        $data['isSuccess'] = false;
+                        $data['message'] = 'Something went wrong.';
+                        return $data;
+                    } else {
+                        $this->DB->trans_commit();
+                    }
+                } catch (Exception $e) {
+                    $this->DB->trans_rollback();
+
+                    $tadata = array(
+                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                    );
+                    $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Something went wrong.';
+                    return $data;
+                }
                 $this->wss_server->_event_push(
                     PopulousWSSConstants::EVENT_ORDER_UPDATED,
                     [
@@ -556,12 +622,46 @@ class Buy extends Trade
             $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
             if ($last_id) {
+                // Transation start
+                $this->DB->trans_start();
+                try {
+                    // HOLD PRIMARY
+                    $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
-                // HOLD PRIMARY
-                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
+                    // $boughtAmount = $this->_safe_math(" $qty - $remaining_qty ");
+                    $boughtAmount = $this->DM->safe_minus([ $qty , $remaining_qty ]);
 
-                // $boughtAmount = $this->_safe_math(" $qty - $remaining_qty ");
-                $boughtAmount = $this->DM->safe_minus([ $qty , $remaining_qty ]);
+                    // Transation end
+                    $this->DB->trans_complete();
+
+                    $trans_status = $this->DB->trans_status();
+
+                    if ($trans_status == FALSE) {
+                        $this->DB->trans_rollback();
+
+                        $tadata = array(
+                            'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                        );
+                        $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                        $data['isSuccess'] = false;
+                        $data['message'] = 'Something went wrong.';
+                        return $data;
+                    } else {
+                        $this->DB->trans_commit();
+                    }
+                } catch (Exception $e) {
+                    $this->DB->trans_rollback();
+
+                    $tadata = array(
+                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                    );
+                    $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Something went wrong.';
+                    return $data;
+                }
 
                 // Event for order creator
                 $this->wss_server->_event_push(
@@ -730,9 +830,47 @@ class Buy extends Trade
 
         $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
-        // Updating SL sell orders status and make them available if price changed
-        $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+        // Transation start
+        $this->DB->trans_start();
+        try {
+            // Updating SL sell orders status and make them available if price changed
+            $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
 
+            // Transation end
+            $this->DB->trans_complete();
+
+            $trans_status = $this->DB->trans_status();
+
+            if ($trans_status == FALSE) {
+                $this->DB->trans_rollback();
+
+                if ($last_id) {
+                    $tadata = array(
+                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                    );
+                    $this->CI->WsServer_model->update_order($last_id, $tadata);
+                }
+
+                $data['isSuccess'] = false;
+                $data['message'] = 'Something went wrong.';
+                return $data;
+            } else {
+                $this->DB->trans_commit();
+            }
+        } catch (Exception $e) {
+            $this->DB->trans_rollback();
+
+            if ($last_id) {
+                $tadata = array(
+                    'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                );
+                $this->CI->WsServer_model->update_order($last_id, $tadata);
+            }
+
+            $data['isSuccess'] = false;
+            $data['message'] = 'Something went wrong.';
+            return $data;
+        }
         /**
          *
          * The stop price is simply the price that triggers a limit order, and the limit price is the specific price of the limit order that was triggered.
@@ -741,9 +879,43 @@ class Buy extends Trade
          */
 
         if ($last_id) {
+            // Transation start
+            $this->DB->trans_start();
+            try {
+                // BUYER : HOLD SECONDARY COIN
+                $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
-            // BUYER : HOLD SECONDARY COIN
-            $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
+                // Transation end
+                $this->DB->trans_complete();
+
+                $trans_status = $this->DB->trans_status();
+
+                if ($trans_status == FALSE) {
+                    $this->DB->trans_rollback();
+
+                    $tadata = array(
+                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                    );
+                    $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Something went wrong.';
+                    return $data;
+                } else {
+                    $this->DB->trans_commit();
+                }
+            } catch (Exception $e) {
+                $this->DB->trans_rollback();
+
+                $tadata = array(
+                    'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                );
+                $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                $data['isSuccess'] = false;
+                $data['message'] = 'Something went wrong.';
+                return $data;
+            }
 
             // Event for order creator
             $this->wss_server->_event_push(
