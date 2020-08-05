@@ -301,7 +301,7 @@ class Buy extends Trade
                         'user_id' => $this->user_id,
                     ]
                 );
-                // Transation start
+                // Transaction start
                 $this->DB->trans_start();
                 try {
                     $buytrade = $this->CI->WsServer_model->get_order($last_id);
@@ -322,7 +322,7 @@ class Buy extends Trade
 
                     } // Salesquery ends here
 
-                    // Transation end
+                    // Transaction end
                     $this->DB->trans_complete();
 
                     $trans_status = $this->DB->trans_status();
@@ -514,7 +514,7 @@ class Buy extends Trade
             );
 
             if ($last_id) {
-                // Transation start
+                // Transaction start
                 $this->DB->trans_start();
                 try {
                     $buytrade = $this->CI->WsServer_model->get_order($last_id);
@@ -524,7 +524,7 @@ class Buy extends Trade
 
                     $this->_do_buy_trade($buytrade, $selltrade);
 
-                    // Transation end
+                    // Transaction end
                     $this->DB->trans_complete();
 
                     $trans_status = $this->DB->trans_status();
@@ -622,7 +622,7 @@ class Buy extends Trade
             $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
             if ($last_id) {
-                // Transation start
+                // Transaction start
                 $this->DB->trans_start();
                 try {
                     // HOLD PRIMARY
@@ -631,7 +631,7 @@ class Buy extends Trade
                     // $boughtAmount = $this->_safe_math(" $qty - $remaining_qty ");
                     $boughtAmount = $this->DM->safe_minus([ $qty , $remaining_qty ]);
 
-                    // Transation end
+                    // Transaction end
                     $this->DB->trans_complete();
 
                     $trans_status = $this->DB->trans_status();
@@ -830,13 +830,13 @@ class Buy extends Trade
 
         $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
-        // Transation start
+        // Transaction start
         $this->DB->trans_start();
         try {
             // Updating SL sell orders status and make them available if price changed
             $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
 
-            // Transation end
+            // Transaction end
             $this->DB->trans_complete();
 
             $trans_status = $this->DB->trans_status();
@@ -879,13 +879,13 @@ class Buy extends Trade
          */
 
         if ($last_id) {
-            // Transation start
+            // Transaction start
             $this->DB->trans_start();
             try {
                 // BUYER : HOLD SECONDARY COIN
                 $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
-                // Transation end
+                // Transaction end
                 $this->DB->trans_complete();
 
                 $trans_status = $this->DB->trans_status();
