@@ -221,127 +221,6 @@ class Sell extends Trade
     }
 
 
-    private function _getMakerFees( $userId,  $coinId ){
-
-        $makerFeesPercentRes = $this->CI->WsServer_model->get_fees_by_coin_id('MAKER', $coinId);
-
-        $standardFeesPercent = $makerFeesPercentRes != null ? floatval( $makerFeesPercentRes->fees ) : 0;
-
-        if( $standardFeesPercent == 0 ) return 0;
-
-        /**
-         * Getting Stack maker percentage, if eligible
-         */
-        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages(  $userId  );
-
-        if( $mt['maker'] == 0 ) return $standardFeesPercent;
-        return $mt['maker'];
-
-    }
-
-    private function _getTakerFees( $userId,  $coinId ){
-
-        $takerFeesPercentRes = $this->CI->WsServer_model->get_fees_by_coin_id('TAKER', $coinId);
-
-        $standardFeesPercent = $takerFeesPercentRes != null ? floatval( $takerFeesPercentRes->fees ) : 0;
-
-        if( $standardFeesPercent == 0 ) return 0;
-
-        /**
-         * Getting Stack taker percentage, if eligible
-         */
-        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages(  $userId  );
-
-        if( $mt['taker'] == 0 ) return $standardFeesPercent;
-        return $mt['taker'];
-
-    }
-
-    /**
-     * Returns calculated fees in amount
-     */
-    private function _calculateFeesAmount( $totalAmount, $feesPercent ){
-        
-        $totalFees = 0;
-
-        if( $feesPercent != 0 ){
-            // $totalFees = $this->_safe_math("  ( $totalAmount * $feesPercent)/100  ");
-
-            $a1 = $this->DM->safe_multiplication( [  $totalAmount, $feesPercent ] );            
-            $totalFees = $this->DM->safe_division( [ $a1, 100 ] ) ;
-
-
-        }else{
-            $totalFees = 0;
-        }
-
-        return $totalFees;        
-
-    }
-
-
-    /**
-     * Returns total fees require
-     */
-
-    private function _calculateTotalFeesAmount( $price, $qty, $coinpairId, $primaryCoinId  ){
-        
-        // $totalAmount = $this->_safe_math(" $price * $qty ");
-        $totalAmount = $this->DM->safe_multiplication([  $price , $qty ]);
-
-        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages( $this->user_id );
-
-        $makerDiscountPercent = $mt['maker'];
-        $takerDiscountPercent = $mt['taker'];
-
-        $available_orderbook_buy_Qty = $this->CI->WsServer_model->get_available_qty_in_buy_orders_within_price($price, $coinpairId);
-        
-        $totalFees = 0;
-
-        // if( $this->_safe_math_condition_check(" $available_orderbook_buy_Qty = 0 ") ){
-        if( $this->DM->isZero($available_orderbook_buy_Qty) ){
-            // NO QTY available in O.B
-            // FULL MAKER
-            
-            $feesPercent    = $this->_getMakerFees( $this->user_id, $primaryCoinId );
-            $totalFees      = $this->_calculateFeesAmount( $totalAmount, $feesPercent );
-
-        // }else if ( $this->_safe_math_condition_check(" $available_orderbook_buy_Qty >= $qty ") ){
-        }else if ( $this->DM->isGreaterThanOrEqual ( $available_orderbook_buy_Qty , $qty ) ){
-            // ALL QTY available in O.B
-            // FULL TAKER
-
-            $feesPercent    = $this->_getTakerFees( $this->user_id, $primaryCoinId );
-            $totalFees      = $this->_calculateFeesAmount( $totalAmount, $feesPercent );
-
-        }else{
-            // PARTIAL MAKER & TAKER
-            // $maker_qty =  $this->_safe_math(" $qty - $available_orderbook_buy_Qty  ");
-            $maker_qty =  $this->DM->safe_minus ([ $qty , $available_orderbook_buy_Qty ] );
-            $taker_qty =  $available_orderbook_buy_Qty;
-
-            // $maker_amount = $this->_safe_math(" $maker_qty * $price  ");
-            // $taker_amount = $this->_safe_math(" $taker_qty * $price  ");
-            $maker_amount = $this->DM->safe_multiplication( [ $maker_qty , $price ] );
-            $taker_amount = $this->DM->safe_multiplication( [ $taker_qty , $price  ]);
-
-            $makerFeesPercent =  $this->_getMakerFees( $this->user_id, $coinId );
-            $takerFeesPercent =  $this->_getTakerFees( $this->user_id, $coinId );
-
-            $makerFees = $this->_calculateFeesAmount( $maker_amount, $makerFeesPercent );
-            $takerFees = $this->_calculateFeesAmount( $taker_amount, $takerFeesPercent );
-
-            // $totalFees = $this->_safe_math(" $makerFees + $takerFees  ");
-
-
-            $totalFees = $this->DM->safe_multiplication([  $makerFees , $makerFees ] );
-
-        }
-
-        return $totalFees;
-        
-    }
-
 
     public function _limit($coinpair_id, $qty, $price, $auth): array
     {
@@ -396,7 +275,7 @@ class Sell extends Trade
         $totalAmount = $this->DM->safe_multiplication([  $price , $qty ]);
 
 
-        $totalFees = $this->_calculateTotalFeesAmount( $price, $qty, $coinpair_id, $primary_coin_id );
+        $totalFees = $this->_calculateTotalFeesAmount( $price, $qty, $coinpair_id, 'SELL' );
         
         $balance_primary = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->user_id);
         
@@ -560,7 +439,7 @@ class Sell extends Trade
          * 
          * Calculate fees
          */
-        $totalFees = $this->_calculateTotalFeesAmount( $last_price , $qty, $coinpair_id, $primary_coin_id );
+        $totalFees = $this->_calculateTotalFeesAmount( $last_price , $qty, $coinpair_id, 'SELL' );
         
         // if ($this->_safe_math_condition_check("$qty > $available_prim_balance")) {
         if ($this->DM->isGreaterThan( $qty, $available_prim_balance )) {
@@ -588,7 +467,7 @@ class Sell extends Trade
              * 
              * Calculate fees
              */
-            $totalFees = $this->_calculateTotalFeesAmount( $buytrade->bid_price , $max_sell_qty, $coinpair_id, $secondary_coin_id );
+            $totalFees = $this->_calculateTotalFeesAmount( $buytrade->bid_price , $max_sell_qty, $coinpair_id, 'SELL' );
             
 
             $open_date = date('Y-m-d H:i:s');
@@ -664,7 +543,7 @@ class Sell extends Trade
              * 
              * Calculate fees
              */
-            $totalFees = $this->_calculateTotalFeesAmount( $last_price , $remaining_qty, $coinpair_id, $primary_coin_id );
+            $totalFees = $this->_calculateTotalFeesAmount( $last_price , $remaining_qty, $coinpair_id, 'SELL' );
 
 
             $tdata['TRADES'] = (object) $tadata = array(
@@ -828,7 +707,7 @@ class Sell extends Trade
         // $totalAmount = $this->_safe_math(" $limit * $qty ");
         $totalAmount = $this->DM->safe_multiplication([ $limit , $qty  ]);
 
-        $totalFees = $this->_calculateTotalFeesAmount( $limit, $qty, $coinpair_id, $primary_coin_id );
+        $totalFees = $this->_calculateTotalFeesAmount( $limit, $qty, $coinpair_id, 'SELL' );
 
 
         $tdata['TRADES'] = (object) $tadata = array(

@@ -104,6 +104,152 @@ class Trade
     }
 
 
+
+    /**
+     * ==========================
+     * FEES Calculations
+     * ==========================
+     */
+
+
+    /**
+     * Return Maker fees according to fees stack
+     */
+    public function _getMakerFees( $userId ){
+
+        /*
+        Note : As per discussion with JASON we will be using stack maker taker default
+        
+        $makerFeesPercentRes = $this->CI->WsServer_model->get_fees_by_coin_id('MAKER', $coinId);
+
+        $standardFeesPercent = $makerFeesPercentRes != null ? floatval( $makerFeesPercentRes->fees ) : 0;
+
+        if( $standardFeesPercent == 0 ) return 0;
+
+        */
+
+        /**
+         * Getting Stack maker percentage, if eligible
+         */
+        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages(  $userId  );
+
+        if( $mt['maker'] == 0 ) return 0;
+        return $mt['maker'];
+
+    }
+
+
+    /**
+     * Return Taker fees according to fees stack
+     */
+    public function _getTakerFees( $userId ){
+
+        /*
+        Note : As per discussion with JASON we will be using stack maker taker default
+
+        $takerFeesPercentRes = $this->CI->WsServer_model->get_fees_by_coin_id('TAKER', $coinId);
+
+        $standardFeesPercent = $takerFeesPercentRes != null ? floatval( $takerFeesPercentRes->fees ) : 0;
+
+        if( $standardFeesPercent == 0 ) return 0;
+        */
+
+        /**
+         * Getting Stack taker percentage, if eligible
+         */
+        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages(  $userId  );
+
+        if( $mt['taker'] == 0 ) return 0;
+        return $mt['taker'];
+
+    }
+
+    
+    /**
+     * Returns calculated fees in amount
+     */
+    public function _calculateFeesAmount( $totalAmount, $feesPercent ){
+        
+        $totalFees = 0;
+
+        if( $feesPercent != 0 ){
+            // $totalFees = $this->_safe_math("  ( $totalAmount * $feesPercent)/100  ");
+            
+            $a1 = $this->DM->safe_multiplication( [  $totalAmount, $feesPercent ] );            
+            $totalFees = $this->DM->safe_division( [ $a1, 100 ] ) ;
+        }else{
+            $totalFees = 0;
+        }
+
+        return $totalFees;        
+
+    }
+
+    /**
+     * Returns total fees require
+     */
+
+    public function _calculateTotalFeesAmount( $price, $qty, $coinpairId, $tradeType  ){
+
+        $mt = $this->CI->WsServer_model->get_maker_taker_discount_percentages( $this->user_id );
+
+        $makerDiscountPercent = $mt['maker'];
+        $takerDiscountPercent = $mt['taker'];
+
+        if( $tradeType == 'BUY' ){
+            $orderbookQty = $this->CI->WsServer_model->get_available_qty_in_buy_orders_within_price($price, $coinpairId);
+        }else if( $tradeType == 'SELL' ){
+            $orderbookQty = $this->CI->WsServer_model->get_available_qty_in_sell_orders_within_price($price, $coinpairId);
+        }
+
+        
+        $totalFees = 0;
+
+        // if( $this->_safe_math_condition_check(" $orderbookQty = 0 ") ){
+        if( $this->DM->isZero($orderbookQty)   ){
+            // NO QTY available in O.B
+            // FULL MAKER
+            
+            $feesPercent    = $this->_getMakerFees( $this->user_id );
+            $totalFees      = $this->_calculateFeesAmount( $qty, $feesPercent );
+
+        // }else if ( $this->_safe_math_condition_check(" $orderbookQty >= $qty ") ){
+        }else if ( $this->DM->isGreaterThanOrEqual($orderbookQty, $qty)  ){
+            // ALL QTY available in O.B
+            // FULL TAKER
+
+            $feesPercent    = $this->_getTakerFees( $this->user_id );
+            $totalFees      = $this->_calculateFeesAmount( $qty, $feesPercent );
+
+        }else{
+            // PARTIAL MAKER & TAKER
+
+            // $maker_qty =  $this->_safe_math(" $qty - $orderbookQty  ");
+            $maker_qty =  $this->DM->safe_minus( [ $qty , $orderbookQty ]);
+            $taker_qty =  $orderbookQty;
+            
+            // $maker_amount = $this->_safe_math(" $maker_qty * $price  ");
+            // $taker_amount = $this->_safe_math(" $taker_qty * $price  ");
+
+            $makerFeesPercent =  $this->_getMakerFees( $this->user_id, $coinId );
+            $takerFeesPercent =  $this->_getTakerFees( $this->user_id, $coinId );
+
+            $makerFees = $this->_calculateFeesAmount( $maker_qty, $makerFeesPercent );
+            $takerFees = $this->_calculateFeesAmount( $taker_qty, $takerFeesPercent );
+
+            // $totalFees =  $this->_safe_math(" $makerFees + $takerFees  ");
+            $totalFees = $this->DM->safe_minus([ $makerFees, $takerFees ]);
+        }
+
+        return $totalFees;
+        
+    }
+
+    
+
+
+    // ORDER Related     
+
     public function cancel_order($order_id, $auth, $rData) {
         
         $user_id = $this->_get_user_id($auth);
