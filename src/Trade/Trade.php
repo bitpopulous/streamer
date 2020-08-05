@@ -77,25 +77,40 @@ class Trade
     
     protected function _validate_primary_value_decimals($number, $decimals)
     {
-        // $primary_max = $this->CI->WsServer_model->max_value($decimals);
-        // $primary_min = $this->CI->WsServer_model->min_value($decimals);
 
-        // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
-        return $this->_validate_decimals( $number, $decimals ) && $this->DM->isZeroOrNegative($number) == false;
+        $a = $this->_validate_decimals( $number, $decimals )  ;
+        $b = $this->DM->isZeroOrNegative($number) == false ; 
+        $c = $this->_validate_decimal_range($number, $decimals) ;
+
+        return  $a && $b && $c;
     }
 
     protected function _validate_secondary_value_decimals($number, $decimals)
     {
-        // $secondary_max = $this->CI->WsServer_model->max_value($decimals);
-        // $secondary_min = $this->CI->WsServer_model->min_value($decimals);
 
-        // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
-        return $this->_validate_decimals( $number, $decimals ) && $this->DM->isZeroOrNegative($number) == false;
+        $a = $this->_validate_decimals( $number, $decimals )  ;
+        $b = $this->DM->isZeroOrNegative($number) == false ; 
+        $c = $this->_validate_decimal_range($number, $decimals) ;
+
+        return  $a && $b && $c;
+
+    }
+
+    protected function _validate_decimal_range($number, $decimals){
+        
+        $_max = $this->max_value($decimals);
+        $_min = $this->min_value($decimals);
+
+        $isGreater = $this->DM->isGreaterThanOrEqual( $number , $_min  );
+        $isLess = $this->DM->isLessThanOrEqual( $number , $_max  );
+
+        return $isGreater && $isLess;
     }
 
     protected function _validate_decimals( $number, $decimals ){
 
         $number = (string) $number;
+        $decimals = intval($decimals);
 
         $l = (int) strlen(substr(strrchr($number, "."), 1));        
         if( $l <= $decimals ) return TRUE;
@@ -103,6 +118,32 @@ class Trade
         return FALSE;
     }
 
+    public function max_value( $decimals ){
+
+        $_str = '';
+
+        for ($i = 1; $i <= 8; $i++) {$_str .= '9';}
+        $_str .= '.';
+        for ($j = 1; $j <= (int) $decimals; $j++) {$_str .= '9';}
+
+        return $_str;
+
+
+    }
+
+    public function min_value( $decimals ){
+        
+        $_str = '0.';
+
+        for( $i = 1; $i < $decimals ; $i++ ){
+            $_str .= '0';
+        }
+
+        $_str .= '1';
+
+        return $_str;
+
+    }
 
 
     /**
