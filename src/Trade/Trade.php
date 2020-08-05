@@ -81,7 +81,7 @@ class Trade
         // $primary_min = $this->CI->WsServer_model->min_value($decimals);
 
         // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $primary_min AND $number <= $primary_max   )");
-        return $this->_validate_decimals( $number, $decimals );
+        return $this->_validate_decimals( $number, $decimals ) && $this->DM->isZeroOrNegative($number) == false;
     }
 
     protected function _validate_secondary_value_decimals($number, $decimals)
@@ -90,7 +90,7 @@ class Trade
         // $secondary_min = $this->CI->WsServer_model->min_value($decimals);
 
         // return $this->_validate_decimals( $number, $decimals ) && $this->CI->WsServer_model->condition_check("( $number >= $secondary_min AND $number <= $secondary_max   )");
-        return $this->_validate_decimals( $number, $decimals ) ;
+        return $this->_validate_decimals( $number, $decimals ) && $this->DM->isZeroOrNegative($number) == false;
     }
 
     protected function _validate_decimals( $number, $decimals ){
