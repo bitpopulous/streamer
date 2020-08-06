@@ -22,6 +22,8 @@ class Sell extends Trade
         if ($buytrade->status == PopulousWSSConstants::BID_PENDING_STATUS &&
             $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS) {
 
+            log_message('debug', '--------DO SELL START--------');
+
             $coinpair_id = intval($selltrade->coinpair_id);
             
             $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
@@ -59,13 +61,18 @@ class Sell extends Trade
             $trade_price    = $this->DM->biggest( $selltrade->bid_price, $buytrade->bid_price );
             $trade_amount   = $this->DM->safe_multiplication( [  $trade_qty, $trade_price ] );
 
+            log_message('debug', 'Trade Qty : '. $trade_qty);
+            log_message('debug', 'Trade Price : '. $trade_price);
+            log_message('debug', 'Trade Amount : '. $trade_amount);
+
+
             /**
              * 
              * SELLET will PAY $trade_qty & GET $trade_amount
              * BUYER will PAY $trade_amount & GET $trade_qty
              */
 
-            // BUYER AND SELLER BALANCE UPDATE HERE
+            // BUYER AND SELLER BALANCE UPDATE HERE 
 
             $buyer_receiving_amount = $trade_qty;
             $seller_will_pay        = $trade_qty;
@@ -84,8 +91,14 @@ class Sell extends Trade
             $buyerPercent   = $this->_getMakerFees( $buytrade->user_id, $primary_coin_id );
             $buyerTotalFees = $this->_calculateFeesAmount( $buyer_receiving_amount, $buyerPercent );
 
+            log_message('debug', 'Buyer Fees Percent : '. $buyerPercent);
+            log_message('debug', 'Buyer Total Fees : '. $buyerTotalFees);
+
             $sellerPercent   = $this->_getTakerFees( $this->user_id, $primary_coin_id );
             $sellerTotalFees = $this->_calculateFeesAmount( $seller_receiving_amount, $sellerPercent );
+
+            log_message('debug', 'Seller Fees Percent : '. $sellerPercent);
+            log_message('debug', 'Seller Total Fees : '. $sellerTotalFees);
 
 
             // $buyer_receiving_amount_after_fees  = $this->_safe_math(" $buyer_receiving_amount - $buyerTotalFees");
@@ -94,16 +107,22 @@ class Sell extends Trade
             $buyer_receiving_amount_after_fees  = $this->DM->safe_minus([ $buyer_receiving_amount, $buyerTotalFees ]);
             $seller_receiving_amount_after_fees = $this->DM->safe_minus([ $seller_receiving_amount , $sellerTotalFees ]);
 
+            log_message('debug', 'Buyer receiving after fees : '. $buyer_receiving_amount_after_fees);
+            log_message('debug', 'Seller receiving after fees : '. $seller_receiving_amount_after_fees);
+
+
             /**
              * Credit Fees to admin
              */
+            log_message( "debug", "---------------------------------------------") ;
+            log_message('debug', 'Start : Admin Fees Credit ');
             $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $buyerTotalFees);
             $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $sellerTotalFees);
+            log_message('debug', 'End : Admin Fees Credit ');
+            log_message( "debug", "---------------------------------------------") ; 
 
-
-            $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $buyer_receiving_amount, $buyer_will_pay);
-
-            $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount);
+            $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $buyer_receiving_amount_after_fees, $buyer_will_pay);
+            $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount_after_fees);
 
 
             /*
@@ -177,6 +196,9 @@ class Sell extends Trade
             // Updating Current minute OHLCV
             $this->CI->WsServer_model->update_current_minute_OHLCV( $coinpair_id, $trade_price, $trade_qty, $success_datetimestamp );
             
+            log_message('debug', '--------DO SELL END--------');
+
+
             /**
              * =================
              * EVENTS
@@ -301,17 +323,34 @@ class Sell extends Trade
             $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
             if ($last_id) {
+
+                log_message('debug', '===========SELL ORDER STARTED===========');
+
+                log_message('debug', 'Order Id : '. $last_id);
+                log_message('debug', 'Price : '. $price);
+                log_message('debug', 'Qty : '. $qty);
+                log_message('debug', 'Total Amount : '. $totalAmount);                
+                log_message('debug', 'Total Fees : '. $totalFees);
+
                 // Transaction start
                 $this->DB->trans_start();
                 try {
                     $selltrade = $this->CI->WsServer_model->get_order($last_id);
 
+                    log_message("debug", "Start : Seller Hold balance " );
+
                     // SELLER BALANCE P_DN & S_UP
-                    $this->CI->WsServer_model->get_credit_hold_balance_from_balance($selltrade->user_id, $primary_coin_id, $qty);
+                    $this->CI->WsServer_model->get_credit_hold_balance_from_balance_new($selltrade->user_id, $primary_coin_id, $qty);
+
+                    log_message("debug", "End : Seller Hold balance " );
+
 
                     $buyers = $this->CI->WsServer_model->get_buyers($price, $coinpair_id);
                     // var_dump($buyers);
                     if ($buyers) {
+
+                        log_message('debug', 'Buyers found');
+
 
                         foreach ($buyers as $key => $buytrade) {
 
@@ -349,6 +388,9 @@ class Sell extends Trade
                 } catch (Exception $e) {
                     $this->DB->trans_rollback();
 
+                    log_message('debug', '===========SELL ORDER FAILED===========');
+
+
                     $tadata = array(
                         'status' => PopulousWSSConstants::BID_FAILED_STATUS,
                     );
@@ -358,6 +400,8 @@ class Sell extends Trade
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 }
+
+                log_message('debug', '===========SELL ORDER FINISHED===========');
 
                 // Event for order creator
                 $this->wss_server->_event_push(
