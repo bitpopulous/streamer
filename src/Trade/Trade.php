@@ -39,18 +39,31 @@ class Trade
 
     protected function _buyer_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
     {
+
+        log_message( "debug", "---------------------------------------------" );
+        log_message( "debug", "START : Buyer Balance Update" );
         // P_DN
-        $this->CI->WsServer_model->get_debit_hold_balance($user_id, $secondary_coin_id, $secondary_amount);
+        $this->CI->WsServer_model->get_debit_hold_balance_new($user_id, $secondary_coin_id, $secondary_amount);
         // S_UP
-        $this->CI->WsServer_model->get_credit_balance($user_id, $primary_coin_id, $primary_amount);
+        $this->CI->WsServer_model->get_credit_balance_new($user_id, $primary_coin_id, $primary_amount);
+
+        log_message( "debug", "END : Buyer Balance Update" );
+        log_message( "debug", "---------------------------------------------") ;
     }
 
     protected function _seller_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
     {
+
+        log_message( "debug", "---------------------------------------------") ;
+        log_message( "debug", "START : Seller Balance Update" );
+
         // P_DN
-        $this->CI->WsServer_model->get_debit_hold_balance($user_id, $primary_coin_id, $primary_amount);
+        $this->CI->WsServer_model->get_debit_hold_balance_new($user_id, $primary_coin_id, $primary_amount);
         // S_UP
-        $this->CI->WsServer_model->get_credit_balance($user_id, $secondary_coin_id, $secondary_amount);
+        $this->CI->WsServer_model->get_credit_balance_new($user_id, $secondary_coin_id, $secondary_amount);
+        
+        log_message( "debug", "END : Seller Balance Update" );
+        log_message( "debug", "---------------------------------------------") ;
     }
 
     protected function _format_number($number, $decimals)
