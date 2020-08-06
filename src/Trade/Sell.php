@@ -22,7 +22,7 @@ class Sell extends Trade
         if ($buytrade->status == PopulousWSSConstants::BID_PENDING_STATUS &&
             $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS) {
 
-            log_message('info', '--------DO SELL START--------');
+            log_message('debug', '--------DO SELL START--------');
 
             $coinpair_id = intval($selltrade->coinpair_id);
             
@@ -196,7 +196,7 @@ class Sell extends Trade
             // Updating Current minute OHLCV
             $this->CI->WsServer_model->update_current_minute_OHLCV( $coinpair_id, $trade_price, $trade_qty, $success_datetimestamp );
             
-            log_message('info', '--------DO SELL END--------');
+            log_message('debug', '--------DO SELL END--------');
 
 
             /**
@@ -337,12 +337,12 @@ class Sell extends Trade
                 try {
                     $selltrade = $this->CI->WsServer_model->get_order($last_id);
 
-                    log_message("debug", "Start = Seller Hold balance " );
+                    log_message("debug", "Start : Seller Hold balance " );
 
                     // SELLER BALANCE P_DN & S_UP
                     $this->CI->WsServer_model->get_credit_hold_balance_from_balance_new($selltrade->user_id, $primary_coin_id, $qty);
 
-                    log_message("debug", "End = Seller Hold balance " );
+                    log_message("debug", "End : Seller Hold balance " );
 
 
                     $buyers = $this->CI->WsServer_model->get_buyers($price, $coinpair_id);
@@ -388,7 +388,7 @@ class Sell extends Trade
                 } catch (Exception $e) {
                     $this->DB->trans_rollback();
 
-                    log_message('error', '===========SELL ORDER FAILED===========');
+                    log_message('debug', '===========SELL ORDER FAILED===========');
 
 
                     $tadata = array(

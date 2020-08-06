@@ -315,10 +315,14 @@ class Trade
             'isSuccess' => true,
             'message' => '',
         ];
+        log_message('debug', '--------DO CANCEL ORDER START--------');
 
         $orderdata = $this->CI->WsServer_model->get_order($order_id);
 
         if ($user_id != $orderdata->user_id) {
+           
+            log_message('debug', 'Order not related to this user. Auth Key '.$auth);
+           
             $data['isSuccess'] = false;
             $data['message'] = 'You are not allow to cancel this order.';
            
@@ -331,13 +335,18 @@ class Trade
             $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
 
             if ($is_updated == false) {
+
+                log_message('debug', 'Something wrong while canceling order');
+
                 $data['isSuccess'] = false;
                 $data['message'] = 'Could not cancelled the order';
             } else {
                 $currency_symbol = '';
                 $currency_id = '';
                 $coinpair_id = $orderdata->coinpair_id;
-    
+                
+                log_message('debug', 'Order Type : '.$orderdata->bid_type);
+
                 $refund_amount = '';
                 if ($orderdata->bid_type == 'SELL') {
                     $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
@@ -346,6 +355,8 @@ class Trade
                     $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);                    
                     $refund_amount = $this->DM->safe_multiplication ([ $orderdata->bid_qty_available , $orderdata->bid_price]);
                 }
+
+                log_message('debug', 'Refund Amount : '.$refund_amount );
     
                 $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
                 //User Financial Log
@@ -361,9 +372,14 @@ class Trade
                 );
     
                 $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
-                $this->CI->WsServer_model->get_credit_balance($orderdata->user_id, $currency_id, $refund_amount);
+
+                log_message('debug', '----- Crediting balance -----' );
+
+                $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
                 // Release hold balance
-                $this->CI->WsServer_model->get_debit_hold_balance($orderdata->user_id, $currency_id, $refund_amount);
+                
+                log_message('debug', '----- Releasing Hold balance -----' );
+                $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
                 
                 $traderlog = array(
                     'bid_id' => $orderdata->id,
@@ -399,6 +415,9 @@ class Trade
                 $data['message'] = 'Request cancelled successfully.';
             }
         }
+
+        log_message('debug', '--------DO CENCEL ORDER FINISHED--------');
+
         return $data;
     }
 }

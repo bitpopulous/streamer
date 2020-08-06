@@ -316,7 +316,7 @@ class Buy extends Trade
 
             if ($last_id) {
 
-                log_message('debug', '===========BUY ORDER STARTED===========');
+                log_message('debug', '===========LIMIT BUY ORDER STARTED===========');
 
                 log_message('debug', 'Order Id : '. $last_id);
                 log_message('debug', 'Price : '. $price);
@@ -337,11 +337,11 @@ class Buy extends Trade
                 try {
                     $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
-                    log_message("debug", "Start = Buyer Hold balance " );
+                    log_message("debug", "Start : Buyer Hold balance " );
 
                     $this->CI->WsServer_model->get_credit_hold_balance_from_balance_new($buytrade->user_id, $secondary_coin_id, $totalAmount);
 
-                    log_message("debug", "End = Buyer Hold balance " );
+                    log_message("debug", "End : Buyer Hold balance " );
 
                     $sellers = $this->CI->WsServer_model->get_sellers($price, $coinpair_id);
 
@@ -380,7 +380,7 @@ class Buy extends Trade
                     }
                 } catch (Exception $e) {
                     $this->DB->trans_rollback();
-                    log_message('error', '===========ORDER FAILED===========');
+                    log_message('error', '===========LIMIT BUY ORDER FAILED===========');
 
                     $tadata = array(
                         'status' => PopulousWSSConstants::BID_FAILED_STATUS,
@@ -392,7 +392,7 @@ class Buy extends Trade
                     return $data;
                 }
 
-                log_message('debug', '===========ORDER FINISHED===========');
+                log_message('debug', '===========LIMIT BUY ORDER FINISHED===========');
 
                 // Send event to every client
                 $this->wss_server->_event_push(
@@ -426,7 +426,7 @@ class Buy extends Trade
 
         } else {
 
-            log_message('error', 'Insufficient balance.');
+            log_message('debug', 'Insufficient balance.');
             $data['isSuccess'] = false;
             $data['message'] = 'Insufficient balance.';
             return $data;
