@@ -253,29 +253,52 @@ class Trade
         $takerDiscountPercent = $mt['taker'];
 
         if( $tradeType == 'BUY' ){
-            $orderbookQty = $this->CI->WsServer_model->get_available_qty_in_buy_orders_within_price($price, $coinpairId);
-        }else if( $tradeType == 'SELL' ){
             $orderbookQty = $this->CI->WsServer_model->get_available_qty_in_sell_orders_within_price($price, $coinpairId);
+        }else if( $tradeType == 'SELL' ){
+            $orderbookQty = $this->CI->WsServer_model->get_available_qty_in_buy_orders_within_price($price, $coinpairId);
         }
+
+        log_message('debug', "" );
+        log_message('debug', "" );
+        log_message('debug', "___________Calculate Total Fees Amount___________" );
 
         
         $totalFees = 0;
+        $totalExchange = $this->DM->safe_multiplication([ $price, $qty ]);
+
+
+        $makerFeesPercent =  $this->_getMakerFees( $this->user_id );
+        $takerFeesPercent =  $this->_getTakerFees( $this->user_id );
 
         // if( $this->_safe_math_condition_check(" $orderbookQty = 0 ") ){
         if( $this->DM->isZero($orderbookQty)   ){
             // NO QTY available in O.B
             // FULL MAKER
+            log_message('debug', "-----------------------------------" );
+            log_message('debug', "FULL MAKER FEES CALCULATIONS" );
+                        
+            $makerFeesPercent    = $this->_getMakerFees( $this->user_id );
+            $totalFees           = $this->_calculateFeesAmount( $totalExchange, $makerFeesPercent );
             
-            $feesPercent    = $this->_getMakerFees( $this->user_id );
-            $totalFees      = $this->_calculateFeesAmount( $qty, $feesPercent );
+            log_message('debug', "Maker Fees Percent : ". $makerFeesPercent);
+            log_message('debug', "Total Fees : ". $totalFees);
+            log_message('debug', "-----------------------------------" );
 
         // }else if ( $this->_safe_math_condition_check(" $orderbookQty >= $qty ") ){
         }else if ( $this->DM->isGreaterThanOrEqual($orderbookQty, $qty)  ){
             // ALL QTY available in O.B
             // FULL TAKER
 
-            $feesPercent    = $this->_getTakerFees( $this->user_id );
-            $totalFees      = $this->_calculateFeesAmount( $qty, $feesPercent );
+            log_message('debug', "-----------------------------------" );
+            log_message('debug', "FULL TAKER FEES CALCULATIONS" );
+
+            $takerFeesPercent    = $this->_getTakerFees( $this->user_id );
+            $totalFees           = $this->_calculateFeesAmount( $totalExchange, $takerFeesPercent );
+
+            log_message('debug', "Taker Fees Percent : ". $takerFeesPercent);
+            log_message('debug', "Total Fees : ". $totalFees);
+            log_message('debug', "-----------------------------------" );
+
 
         }else{
             // PARTIAL MAKER & TAKER
@@ -287,15 +310,29 @@ class Trade
             // $maker_amount = $this->_safe_math(" $maker_qty * $price  ");
             // $taker_amount = $this->_safe_math(" $taker_qty * $price  ");
 
-            $makerFeesPercent =  $this->_getMakerFees( $this->user_id );
-            $takerFeesPercent =  $this->_getTakerFees( $this->user_id );
+            $maker_amount = $this->DM->safe_multiplication([ $maker_qty , $price  ]);
+            $taker_amount = $this->DM->safe_multiplication([ $taker_qty , $price  ]);
 
-            $makerFees = $this->_calculateFeesAmount( $maker_qty, $makerFeesPercent );
-            $takerFees = $this->_calculateFeesAmount( $taker_qty, $takerFeesPercent );
+
+            $makerFees = $this->_calculateFeesAmount( $maker_amount, $makerFeesPercent );
+            $takerFees = $this->_calculateFeesAmount( $taker_amount, $takerFeesPercent );
+
+            log_message('debug', "-----------------------------------" );
+            log_message('debug', "PARTIAL FEES CALCULATIONS" );
+            log_message('debug', "MAKER Fees : ". $makerFees );
+            log_message('debug', "TAKER Fees : ". $takerFees );
 
             // $totalFees =  $this->_safe_math(" $makerFees + $takerFees  ");
-            $totalFees = $this->DM->safe_minus([ $makerFees, $takerFees ]);
+            $totalFees = $this->DM->safe_add([ $makerFees, $takerFees ]);
+            log_message('debug', "Total Fees : ". $totalFees );
+            log_message('debug', "-----------------------------------" );
+
+
         }
+
+        log_message('debug', "" );
+        log_message('debug', "" );
+        
 
         return $totalFees;
         
