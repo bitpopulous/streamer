@@ -138,8 +138,10 @@ class Trade
         $_str = '';
 
         for ($i = 1; $i <= 8; $i++) {$_str .= '9';}
-        $_str .= '.';
-        for ($j = 1; $j <= (int) $decimals; $j++) {$_str .= '9';}
+        if ((int) $decimals > 0) {
+            $_str .= '.';
+            for ($j = 1; $j <= (int) $decimals; $j++) {$_str .= '9';}
+        }
 
         return $_str;
 
