@@ -116,7 +116,7 @@ class PublicEvent extends PublicChannel
     }
 
     public function get_24_hour_summary(){
-        return $this->CI->WsServer_model->get_all_active_coinpairs_24h_summary();
+        return $this->CI->WsServer_model->get_coinpairs_24h_summary();
     }
 
     public function _prepare_24_hour_summary()
