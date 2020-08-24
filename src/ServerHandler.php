@@ -232,7 +232,16 @@ class ServerHandler extends ServerBaseHandler
             ];
             $this->send_safe($recv, json_encode($data_send));
             
-        } else if ( $event == 'market-init-24h-summary' ) {
+        } else if ( $event == 'market-init' ) {
+                        
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' => $this->public_event->_prepare_market_init_data(),
+            ];
+            $this->send_safe($recv, json_encode($data_send));
+            
+        }else if ( $event == 'crypto-rates' ) {
                         
             $data_send = [
                 'event' => $event,
@@ -241,7 +250,16 @@ class ServerHandler extends ServerBaseHandler
             ];
             $this->send_safe($recv, json_encode($data_send));
             
-        } else if ($event == 'api-setting-init') {
+        }else if ( $event == 'fetch-crypto-rates' ) {
+                        
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' => $this->public_event->get_crypto_rates(),
+            ];
+            $this->send_safe($recv, json_encode($data_send));
+            
+        }else if ($event == 'api-setting-init') {
 
             $user_id = $this->private_event->_get_user_id($rData['ua']);
             $arr_return = [

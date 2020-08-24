@@ -27,6 +27,7 @@ class PublicEvent extends PublicChannel
 
         $channels[$crypto_rate_channel] = [
             $this->_prepare_last_price($coin_id),
+            $this->_prepare_crypto_prices(), // All crypto prices 
         ];
 
         $this->_push_event_to_channels($channels);
@@ -93,6 +94,15 @@ class PublicEvent extends PublicChannel
         ];
     }
 
+    private function _prepare_crypto_prices(){
+
+        return [
+            'event' => 'crypto-prices',
+            'data' => $this->get_crypto_rates()
+        ];
+
+    }
+
     private function _prepare_trade_create($log_id)
     {
         $biding_log = $this->CI->WsServer_model->get_biding_log($log_id);
@@ -117,6 +127,7 @@ class PublicEvent extends PublicChannel
 
     public function get_24_hour_summary(){
         return $this->CI->WsServer_model->get_coinpairs_24h_summary();
+        // return $this->CI->WsServer_model->get_all_active_coinpairs_24h_summary();
     }
 
     public function _prepare_24_hour_summary()
@@ -134,6 +145,10 @@ class PublicEvent extends PublicChannel
         return false;
     }
 
+    public function get_crypto_rates(){
+        return $this->CI->WsServer_model->all_crypto_prices();
+    }
+
     public function _prepare_exchange_init_data($coin_id)
     {
         $orders = $this->CI->WsServer_model->get_orders($coin_id, 40);
@@ -142,8 +157,19 @@ class PublicEvent extends PublicChannel
             'market_pairs' => $this->CI->WsServer_model->get_market_pairs(),
             'trade_history' => $this->CI->WsServer_model->get_trades_history($coin_id, 60),
             'coin_history' => $this->CI->WsServer_model->get_coins_history($coin_id, 20),
+            'crypto_rates' => $this->get_crypto_rates(),
             'buy_orders' => $orders['buy_orders'],
             'sell_orders' => $orders['sell_orders'],
+        ];
+    }
+
+    
+    public function _prepare_market_init_data()
+    {        
+
+        return [
+            'summary_24h' => $this->get_24_hour_summary(),            
+            'crypto_rates' => $this->get_crypto_rates()            
         ];
     }
 }

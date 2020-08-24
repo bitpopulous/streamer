@@ -69,6 +69,7 @@ class PrivateEvent extends PrivateChannel
             'pending_orders' => $this->CI->WsServer_model->get_pending_orders($coin_id, 6, $user_id),
             'completed_orders' => $this->CI->WsServer_model->get_completed_orders($coin_id, 6, $user_id),
             'user_balance' => $this->CI->WsServer_model->get_user_balances($user_id),
+            'crypto_rates' => $this->CI->WsServer_model->all_crypto_prices()
         ];
     }
     
