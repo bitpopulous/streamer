@@ -116,8 +116,85 @@ class Sell extends Trade
              */
             log_message( "debug", "---------------------------------------------") ;
             log_message('debug', 'Start : Admin Fees Credit ');
-            $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $buyerTotalFees);
-            $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $sellerTotalFees);
+            $adminPrimaryCoinBalanceDetail     = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->admin_id);
+            $adminSecondaryBalanceCoinDetail     = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $this->admin_id);
+
+            $referralCommissionPercentRate = $this->CI->WsServer_model->getReferralCommissionRate();
+
+            $isBuyerReferredUser = $this->CI->WsServer_model->isReferredUser( $buytrade->user_id );
+            $isSellerReferredUser = $this->CI->WsServer_model->isReferredUser( $selltrade->user_id );
+
+            log_message("debug", "Is BUYER referred User : ". $isBuyerReferredUser );
+            log_message("debug", "Is SELLER referred User : ". $isSellerReferredUser );
+
+
+            // Check if BUYER user is referred user
+            if( $isBuyerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false ){
+
+                // Give 10% of commision to referral user Id
+                $buyerReferralUserId = $this->CI->WsServer_model->getReferralUserId( $buytrade->user_id );
+                log_message("debug", "Referral Buyer User Id : ". $buyerReferralUserId );
+
+                $buyerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $buyerReferralUserId  );
+                
+                $referralCommission = $this->DM->safe_division( [ $buyerTotalFees , $referralCommissionPercentRate ] );
+                log_message("debug", "Referral Commission : ". $referralCommission );
+
+                $adminGetsAfterCommission = $this->DM->safe_minus( [ $buyerTotalFees , $referralCommission ] );
+
+                // REFERRAL USER
+                $this->_referral_user_balance_update( $buyerReferralUserId, $primary_coin_id, $referralCommission );
+                // Add Referral User Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $buyerReferralBalanceDetail->id, $buyerReferralUserId, $primary_coin_id, $referralCommission, 0 );
+
+                // ADMIN
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $adminGetsAfterCommission);            
+                // Add Admin Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $adminGetsAfterCommission, 0 );
+                
+
+            }else{
+
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $buyerTotalFees);            
+                // Add Admin Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $buyerTotalFees, 0 );
+            }
+
+
+            // Check if BUYER user is referred user
+            if( $isSellerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false ){
+
+                // Give 10% of commision to referral user Id
+                $sellerReferralUserId = $this->CI->WsServer_model->getReferralUserId( $selltrade->user_id );
+                log_message("debug", "Referral Seller User Id : ". $sellerReferralUserId );
+                
+                $sellerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $sellerReferralUserId  );
+                
+                $referralCommission = $this->DM->safe_division( [ $sellerTotalFees , $referralCommissionPercentRate ] );
+                log_message("debug", "Referral Commission : ". $referralCommission );
+
+                $adminGetsAfterCommission = $this->DM->safe_minus( [ $sellerTotalFees , $referralCommission ] );
+                
+
+                // REFERRAL USER
+                $this->_referral_user_balance_update( $sellerReferralUserId, $secondary_coin_id, $referralCommission );
+                // Add Referral User Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $sellerReferralBalanceDetail->id, $sellerReferralUserId, $secondary_coin_id, $referralCommission, 0 );
+
+                // ADMIN
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $adminGetsAfterCommission);
+                // Add Admin Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $adminGetsAfterCommission, 0 );
+
+
+            }else{
+
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $sellerTotalFees);
+                // Add Admin Balance Log
+                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $sellerTotalFees, 0 );
+            }
+
+            
             log_message('debug', 'End : Admin Fees Credit ');
             log_message( "debug", "---------------------------------------------") ; 
 

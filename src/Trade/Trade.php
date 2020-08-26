@@ -17,6 +17,7 @@ class Trade
 
     protected $wss_server;
     protected $user_id;
+    protected $admin_id;
 
     public $DM;
     public $DB;
@@ -34,8 +35,23 @@ class Trade
 
         $this->DM =& $this->CI->decimalmaths;
         $this->DB = $this->CI->db;
+        $this->admin_id = getenv('ADMIN_USER_ID');
     }
     
+
+
+    protected function _referral_user_balance_update($user_id, $coin_id, $amount )
+    {
+
+        log_message( "debug", "---------------------------------------------" );
+        log_message( "debug", "START : Referral User Balance Update" );
+        log_message( "debug", "Referral User Id : ". $user_id );
+
+        $this->CI->WsServer_model->get_credit_balance_new($user_id, $coin_id, $amount);
+
+        log_message( "debug", "END : Referral User Balance Update" );
+        log_message( "debug", "---------------------------------------------") ;
+    }
 
     protected function _buyer_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
     {
