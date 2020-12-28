@@ -1,4 +1,5 @@
 <?php
+
 namespace PopulousWSS;
 
 use Monolog\Handler\StreamHandler;
@@ -32,7 +33,7 @@ class ServerBaseHandler extends WebSocket
             'WsServer_model',
         ]);
     }
-    
+
     public function onOpen(ConnectionContract $conn)
     {
         $connId = $conn->getUniqueSocketId();
@@ -57,7 +58,6 @@ class ServerBaseHandler extends WebSocket
 
                 $this->_event_handler($recv, $channel, $event, $data);
             }
-
         } else {
             $this->log->debug($msg);
             if ($msg == 'ping') {
@@ -122,5 +122,9 @@ class ServerBaseHandler extends WebSocket
     {
         return explode('-', $channel)[0] === PopulousWSSConstants::PRIVATE_CHANNEL;
     }
-   
+
+    protected function _is_external_channel(string $channel): bool
+    {
+        return explode('-', $channel)[0] === PopulousWSSConstants::EXTERNAL_CHANNEL;
+    }
 }
