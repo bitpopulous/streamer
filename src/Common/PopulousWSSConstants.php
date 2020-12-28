@@ -12,11 +12,12 @@ interface PopulousWSSConstants
     public const SUBSCRIBE_SUCCESS = 'populous:subscribe_succeeded';
 
     public const PRIVATE_CHANNEL = 'private';
+    public const EXTERNAL_CHANNEL = 'external';
 
     public const TRADE_TYPE_LIMIT = 'limit';
     public const TRADE_TYPE_MARKET = 'market';
     public const TRADE_TYPE_STOP_LIMIT = 'stop_limit';
-    
+
 
     public const BID_PENDING_STATUS = 0;
     public const BID_COMPLETE_STATUS = 1;
@@ -28,4 +29,5 @@ interface PopulousWSSConstants
     public const EVENT_COINPAIR_UPDATED = 2;
     public const EVENT_TRADE_CREATED = 3;
     public const EVENT_MARKET_SUMMARY = 4;
+    public const EVENT_EXTERNAL_ORDERBOOK_UPDATE = 5;
 }
