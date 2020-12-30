@@ -43,8 +43,8 @@ class ExternalEvent extends ExternalChannel
             } else {
                 // It's exist, Calculate it
 
-                $buyOrders[$_pb['bid_price']]['total_qty'] = $this->DM->safe_addition($buyOrders[$_pb['bid_price']]['total_qty'], $_pb['total_qty']);
-                $buyOrders[$_pb['bid_price']]['total_price'] = $this->DM->safe_addition($buyOrders[$_pb['bid_price']]['total_price'], $_pb['total_price']);
+                $buyOrders[$_pb['bid_price']]['total_qty'] = $this->DM->safe_add([$buyOrders[$_pb['bid_price']]['total_qty'], $_pb['total_qty']]);
+                $buyOrders[$_pb['bid_price']]['total_price'] = $this->DM->safe_add([$buyOrders[$_pb['bid_price']]['total_price'], $_pb['total_price']]);
             }
         }
 
@@ -54,15 +54,16 @@ class ExternalEvent extends ExternalChannel
                 $sellOrders[$_ps['bid_price']] = $_ps;
             } else {
                 // It's exist, Calculate it
-                $sellOrders[$_ps['bid_price']]['total_qty'] = $this->DM->safe_addition($sellOrders[$_ps['bid_price']]['total_qty'], $_ps['total_qty']);
-                $sellOrders[$_ps['bid_price']]['total_price'] = $this->DM->safe_addition($sellOrders[$_ps['bid_price']]['total_price'], $_ps['total_price']);
+                $sellOrders[$_ps['bid_price']]['total_qty'] = $this->DM->safe_add([$sellOrders[$_ps['bid_price']]['total_qty'], $_ps['total_qty']]);
+                $sellOrders[$_ps['bid_price']]['total_price'] = $this->DM->safe_add([$sellOrders[$_ps['bid_price']]['total_price'], $_ps['total_price']]);
             }
         }
 
         krsort($buyOrders); // Ascending 
         krsort($sellOrders); // Descending
-        $buyOrders = array_values($buyOrders);
-        $sellOrders = array_values($sellOrders);
+        $buyOrders = array_slice( array_values($buyOrders), 0, 30 );
+        $sellOrders = array_slice(array_values($sellOrders), 0, 30 );
+
 
         // $popexSellers = $popexOrderbook['sell_orders'];
         // $binanceSellers = $binanceOrderbook['ask'];  
