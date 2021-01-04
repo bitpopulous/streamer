@@ -4,6 +4,7 @@ namespace PopulousWSS\Events;
 
 use PopulousWSS\Channels\ExternalChannel;
 use PopulousWSS\ServerHandler;
+use PopulousWSS\Common\PopulousWSSConstants;
 
 class ExternalEvent extends ExternalChannel
 {
@@ -61,8 +62,8 @@ class ExternalEvent extends ExternalChannel
 
         krsort($buyOrders); // Ascending 
         krsort($sellOrders); // Descending
-        $buyOrders = array_slice( array_values($buyOrders), 0, 40 );
-        $sellOrders = array_slice(array_values($sellOrders), 0, 40 );
+        $buyOrders = array_slice(array_values($buyOrders), 0, 30);
+        $sellOrders = array_slice(array_values($sellOrders), 0, 30);
 
 
         // $popexSellers = $popexOrderbook['sell_orders'];
@@ -102,6 +103,191 @@ class ExternalEvent extends ExternalChannel
         $channels = [];
         $channels[$marketGlobalChannel] = [];
         $channels[$marketGlobalChannel][] = $event;
+
+        return $channels;
+    }
+
+    public function _event_binance_order_update(array $binanceOrderDetail)
+    {
+        // Find order of popex by binance's order Id
+        // Update bid_qty_available, amount_available, Update status (optional)
+
+
+        $tradeDetail = $this->CI->WsServer_model->getPopexOrderByBinanceOrderId($binanceOrderDetail['id']);
+
+        $channels = [];
+
+        if ($tradeDetail != null) {
+
+            $executionType = $binanceOrderDetail['executionType'];
+
+            if ($executionType  == BINANCE_ORDER_STATUS_CANCELED) {
+                // $this->CI->trade->binance_cancel_trade($binanceOrderDetail['id']);
+                // We will be not supporting this event , since this cancellation feature is being used by PHP API directly 
+            } else if ($executionType == BINANCE_ORDER_STATUS_PARTIALLY_FILLED) {
+                // Update bid_qty_available, amount_available
+
+                $this->log->info('-----------BINANCE PARTIAL ORDER UPDATE STARTED------------------');
+
+                $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($tradeDetail->coinpair_id);
+                $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($tradeDetail->coinpair_id);
+
+                $this->log->info('Primary coin Id ' . $primary_coin_id);
+                $this->log->info('Primary coin Id : ' . $primary_coin_id);
+                $this->log->info('Secondary coin Id : ' . $secondary_coin_id);
+
+                $quantity = $binanceOrderDetail['quantity'];
+                $trade_price = $binanceOrderDetail['price'];
+                $trade_amount   = $this->CI->DM->safe_multiplication([$quantity, $trade_price]);
+
+                $side = strtoupper($binanceOrderDetail['side']);
+
+                $this->log->info('Side : ' . $side);
+                $this->log->info('quantity : ' . $quantity);
+                $this->log->info('trade_price : ' . $trade_price);
+                $this->log->info('trade_amount : ' . $trade_amount);
+
+                $success_datetime = date('Y-m-d H:i:s', $binanceOrderDetail['eventTime']);
+                $success_datetimestamp = $binanceOrderDetail['eventTime'];
+
+                $log_id = null;
+
+
+                if ($side == 'BUY') {
+                    // Buy order
+                    // ORDER UPDATE
+                    $buytrade = (object) $tradeDetail;
+
+                    $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
+                    $buyer_av_qty_after_trade = $this->DM->safe_minus([$buytrade->bid_qty_available, $quantity]);
+
+                    $this->log->info('buyer_av_bid_amount_after_trade : ' . $buyer_av_bid_amount_after_trade);
+                    $this->log->info('buyer_av_qty_after_trade : ' . $buyer_av_qty_after_trade);
+
+                    $buyupdate = array(
+                        'bid_qty_available' => $buyer_av_qty_after_trade,
+                        'amount_available' => $buyer_av_bid_amount_after_trade,
+                        'status' =>  PopulousWSSConstants::BID_PENDING_STATUS,
+                    );
+
+                    $this->log->info('BUY TRADE UPDATE ->', $buyupdate);
+
+
+                    $buytraderlog = array(
+                        'bid_id' => $buytrade->id,
+                        'bid_type' => $buytrade->bid_type,
+                        'complete_qty' => $quantity,
+                        'bid_price' => $trade_price,
+                        'complete_amount' => $trade_amount,
+                        'user_id' => $buytrade->user_id,
+                        'coinpair_id' => $buytrade->coinpair_id,
+                        'success_time' => $success_datetime,
+                        'fees_amount' => 0,
+                        'available_amount' => $buyer_av_qty_after_trade,
+                        'status' =>  PopulousWSSConstants::BID_PENDING_STATUS,
+                    );
+
+
+                    $this->log->info('debug', 'BUY TRADER LOG -> ', $buytraderlog);
+
+                    $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
+
+                    // BALANCE UPDATE
+                    $this->trade->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $quantity, $trade_amount);
+
+                    $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
+
+                    $this->CI->WsServer_model->update_current_minute_OHLCV($buytrade->coinpair_id, $trade_price, $quantity, $success_datetimestamp);
+                } else if ($side == 'SELL') {
+                    // Sell orders
+
+                    $selltrade = (object) $tradeDetail;
+
+                    $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
+                    $seller_av_qty_after_trade = $this->DM->safe_minus([$selltrade->bid_qty_available, $quantity]);
+
+                    $this->log->info('seller_av_bid_amount_after_trade : ' . $seller_av_bid_amount_after_trade);
+                    $this->log->info('seller_av_qty_after_trade : ' . $seller_av_qty_after_trade);
+
+                    $sellupdate = array(
+                        'bid_qty_available' => $seller_av_qty_after_trade,
+                        'amount_available' => $seller_av_bid_amount_after_trade,
+                        'status' => PopulousWSSConstants::BID_PENDING_STATUS,
+                    );
+
+                    $this->log->info('SELL TRADE UPDATE -> ', $sellupdate);
+
+                    $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
+
+                    $selltraderlog = array(
+                        'bid_id' => $selltrade->id,
+                        'bid_type' => $selltrade->bid_type,
+                        'complete_qty' => $quantity,
+                        'bid_price' => $trade_price,
+                        'complete_amount' => $trade_amount,
+                        'user_id' => $selltrade->user_id,
+                        'coinpair_id' => $selltrade->coinpair_id,
+                        'success_time' => $success_datetime,
+                        'fees_amount' => 0,
+                        'available_amount' => $seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
+                        'status' =>  PopulousWSSConstants::BID_PENDING_STATUS,
+                    );
+
+                    $this->log->info('SELL TRADER LOG ->', $selltraderlog);
+
+                    $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
+
+                    // Updating Current minute OHLCV
+                    $this->CI->WsServer_model->update_current_minute_OHLCV($selltrade->coinpair_id, $trade_price, $quantity, $success_datetimestamp);
+                }
+
+                $this->log->info('Log ID : ' . $log_id);
+
+
+                /**
+                 * =================
+                 * EVENTS
+                 * =================
+                 */
+
+                try {
+                    // EVENTS for both party
+                    $this->wss_server->_event_push(
+                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                        [
+                            'order_id' => $tradeDetail->id,
+                            'user_id' => $tradeDetail->user_id,
+                        ]
+                    );
+
+                    if ($log_id != null) {
+
+                        // EVENT for single trade
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_TRADE_CREATED,
+                            [
+                                'log_id' => $log_id,
+                            ]
+                        );
+                    }
+
+                    $this->wss_server->_event_push(
+                        PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                        []
+                    );
+                } catch (\Exception $e) {
+                }
+
+                $this->log->info('-----------BINANCE PARTIAL ORDER UPDATE FINISHED------------------');
+            } else if ($executionType == BINANCE_ORDER_STATUS_FILLED) {
+                // Make sure the order is not completed/filled
+                // Update bid_qty_available, amount_available, status = BID_COMPLETE_STATUS
+
+
+            } else if ($executionType == BINANCE_ORDER_STATUS_REJECTED || $executionType == BINANCE_ORDER_STATUS_EXPIRED) {
+                // Do not do anything here yet
+            }
+        }
 
         return $channels;
     }

@@ -10,27 +10,29 @@ class Buy extends Trade
 {
     public function __construct(ServerHandler $server)
     {
-        parent::__construct( $server );
+        parent::__construct($server);
         $this->wss_server = $server;
     }
-    
+
     private function _do_buy_trade($buytrade, $selltrade)
     {
 
-        if ($buytrade->status == PopulousWSSConstants::BID_PENDING_STATUS
-            && $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS) {
+        if (
+            $buytrade->status == PopulousWSSConstants::BID_PENDING_STATUS
+            && $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS
+        ) {
 
             log_message('info', '--------DO BUY START--------');
-            
+
 
             $coinpair_id = intval($buytrade->coinpair_id);
-            
+
             $primary_coin_id    = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
             $secondary_coin_id  = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
 
             $ps_decimals = $this->CI->WsServer_model->_get_decimals_of_coin($coinpair_id);
 
-            if( $ps_decimals['fetch'] == false ) return FALSE;
+            if ($ps_decimals['fetch'] == false) return FALSE;
 
             $primary_coin_decimal   = $ps_decimals['primary_decimals'];
             $secondary_coin_decimal = $ps_decimals['secondary_decimals'];
@@ -38,7 +40,7 @@ class Buy extends Trade
             // $calcQuery = "SELECT t.*, (SELECT( CAST(  t.trade_qty * t.trade_price  as DECIMAL( 24, $secondary_coin_decimal ) )  ) ) as trade_amount  
             //               from ( SELECT LEAST( $selltrade->bid_qty_available, $buytrade->bid_qty_available ) as trade_qty, LEAST(  $selltrade->bid_price, $buytrade->bid_price  ) as trade_price ) as t";
 
-                        
+
 
             // $calcResult     = $this->CI->WsServer_model->dbQuery( $calcQuery );
 
@@ -47,19 +49,19 @@ class Buy extends Trade
             // }
 
             // $calcResult = $calcResult->row();
-            
+
             // $trade_qty      = $calcResult->trade_qty;
             // $trade_price    = $calcResult->trade_price;
             // $trade_amount   = $calcResult->trade_amount;
 
-            $trade_qty      = $this->DM->smallest( $selltrade->bid_qty_available, $buytrade->bid_qty_available );
-            $trade_price    = $this->DM->smallest( $selltrade->bid_price, $buytrade->bid_price );
-           
-            $trade_amount   = $this->DM->safe_multiplication( [  $trade_qty, $trade_price ] );
+            $trade_qty      = $this->DM->smallest($selltrade->bid_qty_available, $buytrade->bid_qty_available);
+            $trade_price    = $this->DM->smallest($selltrade->bid_price, $buytrade->bid_price);
 
-            log_message('debug', 'Trade Qty : '. $trade_qty);
-            log_message('debug', 'Trade Price : '. $trade_price);
-            log_message('debug', 'Trade Amount : '. $trade_amount);
+            $trade_amount   = $this->DM->safe_multiplication([$trade_qty, $trade_price]);
+
+            log_message('debug', 'Trade Qty : ' . $trade_qty);
+            log_message('debug', 'Trade Price : ' . $trade_price);
+            log_message('debug', 'Trade Amount : ' . $trade_amount);
 
 
             /**
@@ -74,37 +76,37 @@ class Buy extends Trade
             $seller_will_pay        = $trade_qty;
 
             $seller_receiving_amount = $trade_amount; //$this->_safe_math(" $trade_qty * $trade_price ");
-            $buyer_will_pay          = $trade_amount ;//$this->_safe_math(" $trade_qty * $trade_price ");
+            $buyer_will_pay          = $trade_amount; //$this->_safe_math(" $trade_qty * $trade_price ");
 
             /**
              * Here buyer always be a TAKER and seller as a MAKER
              */
-            $buyerPercent   = $this->_getTakerFees( $buytrade->user_id );
-            $buyerTotalFees = $this->_calculateFeesAmount( $buyer_receiving_amount, $buyerPercent );
+            $buyerPercent   = $this->_getTakerFees($buytrade->user_id);
+            $buyerTotalFees = $this->_calculateFeesAmount($buyer_receiving_amount, $buyerPercent);
 
-            log_message('debug', 'Buyer Percent : '. $buyerPercent);
-            log_message('debug', 'Buyer Total Fees : '. $buyerTotalFees);
+            log_message('debug', 'Buyer Percent : ' . $buyerPercent);
+            log_message('debug', 'Buyer Total Fees : ' . $buyerTotalFees);
 
-            $sellerPercent   = $this->_getMakerFees( $selltrade->user_id );
-            $sellerTotalFees = $this->_calculateFeesAmount( $seller_receiving_amount, $sellerPercent );
+            $sellerPercent   = $this->_getMakerFees($selltrade->user_id);
+            $sellerTotalFees = $this->_calculateFeesAmount($seller_receiving_amount, $sellerPercent);
 
-            log_message('debug', 'Seller Percent : '. $sellerPercent);
-            log_message('debug', 'Seller Total Fees : '. $sellerTotalFees);
+            log_message('debug', 'Seller Percent : ' . $sellerPercent);
+            log_message('debug', 'Seller Total Fees : ' . $sellerTotalFees);
 
             // $buyer_receiving_amount_after_fees  = $this->_safe_math(" $buyer_receiving_amount - $buyerTotalFees");
             // $seller_receiving_amount_after_fees = $this->_safe_math(" $seller_receiving_amount - $sellerTotalFees");
 
-            $buyer_receiving_amount_after_fees  = $this->DM->safe_minus( [  $buyer_receiving_amount, $buyerTotalFees ] );
-            $seller_receiving_amount_after_fees = $this->DM->safe_minus( [  $seller_receiving_amount, $sellerTotalFees ] );
+            $buyer_receiving_amount_after_fees  = $this->DM->safe_minus([$buyer_receiving_amount, $buyerTotalFees]);
+            $seller_receiving_amount_after_fees = $this->DM->safe_minus([$seller_receiving_amount, $sellerTotalFees]);
 
-            log_message('debug', 'Buyer receiving after fees : '. $buyer_receiving_amount_after_fees);
-            log_message('debug', 'Seller receiving after fees : '. $seller_receiving_amount_after_fees);
+            log_message('debug', 'Buyer receiving after fees : ' . $buyer_receiving_amount_after_fees);
+            log_message('debug', 'Seller receiving after fees : ' . $seller_receiving_amount_after_fees);
 
 
             /**
              * Credit Fees to admin
              */
-            log_message( "debug", "---------------------------------------------") ;
+            log_message("debug", "---------------------------------------------");
             log_message('debug', 'Start : Admin Fees Credit ');
 
             $adminPrimaryCoinBalanceDetail     = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->admin_id);
@@ -112,86 +114,82 @@ class Buy extends Trade
 
             $referralCommissionPercentRate = $this->CI->WsServer_model->getReferralCommissionRate();
 
-            $isBuyerReferredUser = $this->CI->WsServer_model->isReferredUser( $buytrade->user_id );
-            $isSellerReferredUser = $this->CI->WsServer_model->isReferredUser( $selltrade->user_id );
+            $isBuyerReferredUser = $this->CI->WsServer_model->isReferredUser($buytrade->user_id);
+            $isSellerReferredUser = $this->CI->WsServer_model->isReferredUser($selltrade->user_id);
 
-            log_message("debug", "Is BUYER referred User : ". $isBuyerReferredUser );
-            log_message("debug", "Is SELLER referred User : ". $isSellerReferredUser );
+            log_message("debug", "Is BUYER referred User : " . $isBuyerReferredUser);
+            log_message("debug", "Is SELLER referred User : " . $isSellerReferredUser);
 
             // Check if BUYER user is referred user
-            if( $isBuyerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false ){
+            if ($isBuyerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false) {
                 // Give 10% of commision to referral user Id
-                $buyerReferralUserId = $this->CI->WsServer_model->getReferralUserId( $buytrade->user_id );
-                log_message("debug", "Referral Buyer User Id : ". $buyerReferralUserId );
+                $buyerReferralUserId = $this->CI->WsServer_model->getReferralUserId($buytrade->user_id);
+                log_message("debug", "Referral Buyer User Id : " . $buyerReferralUserId);
 
-                $buyerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $buyerReferralUserId  );
-                
-                $referralCommission = $this->DM->safe_division( [ $buyerTotalFees , $referralCommissionPercentRate ] );
-                log_message("debug", "Referral Commission : ". $referralCommission );
+                $buyerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $buyerReferralUserId);
 
-                $adminGetsAfterCommission = $this->DM->safe_minus( [ $buyerTotalFees , $referralCommission ] );
+                $referralCommission = $this->DM->safe_division([$buyerTotalFees, $referralCommissionPercentRate]);
+                log_message("debug", "Referral Commission : " . $referralCommission);
+
+                $adminGetsAfterCommission = $this->DM->safe_minus([$buyerTotalFees, $referralCommission]);
 
                 // REFERRAL USER
-                $this->_referral_user_balance_update( $buyerReferralUserId, $primary_coin_id, $referralCommission );
+                $this->_referral_user_balance_update($buyerReferralUserId, $primary_coin_id, $referralCommission);
                 // Add Referral User Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $buyerReferralBalanceDetail->id, $buyerReferralUserId, $primary_coin_id, $referralCommission, 0 );
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $buyerReferralBalanceDetail->id, $buyerReferralUserId, $primary_coin_id, $referralCommission, 0);
 
                 // ADMIN
-                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $adminGetsAfterCommission);            
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $adminGetsAfterCommission);
                 // Add Admin Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $adminGetsAfterCommission, 0 );
-                
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $adminGetsAfterCommission, 0);
+            } else {
 
-            }else{
-
-                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $buyerTotalFees);            
+                $this->CI->WsServer_model->credit_admin_fees_by_coin_id($primary_coin_id, $buyerTotalFees);
                 // Add Admin Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $buyerTotalFees, 0 );
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminPrimaryCoinBalanceDetail->id, $this->admin_id, $primary_coin_id, $buyerTotalFees, 0);
             }
 
 
             // Check if BUYER user is referred user
-            if( $isSellerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false ){
+            if ($isSellerReferredUser && $this->DM->isZeroOrNegative($referralCommissionPercentRate) == false) {
 
                 // Give 10% of commision to referral user Id
-                $sellerReferralUserId = $this->CI->WsServer_model->getReferralUserId( $selltrade->user_id );
-                log_message("debug", "Referral Seller User Id : ". $sellerReferralUserId );
+                $sellerReferralUserId = $this->CI->WsServer_model->getReferralUserId($selltrade->user_id);
+                log_message("debug", "Referral Seller User Id : " . $sellerReferralUserId);
 
-                $sellerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $sellerReferralUserId  );
-                
-                $referralCommission = $this->DM->safe_division( [ $sellerTotalFees , $referralCommissionPercentRate ] );
-                log_message("debug", "Referral Commission : ". $referralCommission );
+                $sellerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $sellerReferralUserId);
 
-                $adminGetsAfterCommission = $this->DM->safe_minus( [ $sellerTotalFees , $referralCommission ] );
-                
+                $referralCommission = $this->DM->safe_division([$sellerTotalFees, $referralCommissionPercentRate]);
+                log_message("debug", "Referral Commission : " . $referralCommission);
+
+                $adminGetsAfterCommission = $this->DM->safe_minus([$sellerTotalFees, $referralCommission]);
+
 
                 // REFERRAL USER
-                $this->_referral_user_balance_update( $sellerReferralUserId, $secondary_coin_id, $referralCommission );
+                $this->_referral_user_balance_update($sellerReferralUserId, $secondary_coin_id, $referralCommission);
                 // Add Referral User Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $sellerReferralBalanceDetail->id, $sellerReferralUserId, $secondary_coin_id, $referralCommission, 0 );
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_REFERRAL_CREDIT, $sellerReferralBalanceDetail->id, $sellerReferralUserId, $secondary_coin_id, $referralCommission, 0);
 
                 // ADMIN
                 $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $adminGetsAfterCommission);
                 // Add Admin Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $adminGetsAfterCommission, 0 );
-
-
-            }else{
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $adminGetsAfterCommission, 0);
+            } else {
 
                 $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $sellerTotalFees);
                 // Add Admin Balance Log
-                $this->CI->WsServer_model->addBalanceLog( BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $sellerTotalFees, 0 );
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryBalanceCoinDetail->id, $this->admin_id, $secondary_coin_id, $sellerTotalFees, 0);
             }
 
 
 
             log_message('debug', 'End : Admin Fees Credit ');
-            log_message( "debug", "---------------------------------------------") ; 
+            log_message("debug", "---------------------------------------------");
 
             // BUYER WILL GET PRIMARY COIN
             // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
             // AND PRIMARY COIN WILL BE CREDITED
-            $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $buyer_receiving_amount_after_fees, $buyer_will_pay); 
+            $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $buyer_receiving_amount_after_fees, $buyer_will_pay);
 
             // SELLER WILL GET SECONDARY COIN
             // THE PRIMARY AMOUNT SELLER HAS HOLD WILL BE DEDUCTED
@@ -214,20 +212,20 @@ class Buy extends Trade
 
             */
 
-            $buyer_av_bid_amount_after_trade = $this->DM->safe_minus( [  $buytrade->amount_available , $trade_amount  ] );
-            $seller_av_bid_amount_after_trade = $this->DM->safe_minus( [  $selltrade->amount_available , $trade_amount  ] );
-            $buyer_av_qty_after_trade = $this->DM->safe_minus( [  $buytrade->bid_qty_available , $trade_qty  ] );
-            $seller_av_qty_after_trade = $this->DM->safe_minus( [  $selltrade->bid_qty_available , $trade_qty ] );
-            
-            $buyer_qty_fulfilled = $this->DM->safe_minus( [  $buytrade->bid_qty_available , $trade_qty ] );
-            $seller_qty_fulfilled = $this->DM->safe_minus( [  $selltrade->bid_qty_available , $trade_qty ] );
+            $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
+            $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
+            $buyer_av_qty_after_trade = $this->DM->safe_minus([$buytrade->bid_qty_available, $trade_qty]);
+            $seller_av_qty_after_trade = $this->DM->safe_minus([$selltrade->bid_qty_available, $trade_qty]);
+
+            $buyer_qty_fulfilled = $this->DM->safe_minus([$buytrade->bid_qty_available, $trade_qty]);
+            $seller_qty_fulfilled = $this->DM->safe_minus([$selltrade->bid_qty_available, $trade_qty]);
 
             $is_buyer_qty_fulfilled = $this->DM->isZero($buyer_qty_fulfilled);
             $is_seller_qty_fulfilled = $this->DM->isZero($seller_qty_fulfilled);
 
 
             $buyupdate = array(
-                'bid_qty_available' => $buyer_av_qty_after_trade ,
+                'bid_qty_available' => $buyer_av_qty_after_trade,
                 'amount_available' => $buyer_av_bid_amount_after_trade,
                 'status' => $is_buyer_qty_fulfilled  ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
@@ -258,16 +256,16 @@ class Buy extends Trade
 
             $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
             $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
-            
-            $log_id = $this->CI->WsServer_model->insert_order_log( $buytraderlog);
+
+            $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
 
             // Updating SL sell orders status and make them available if price changed
             $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
 
             // Updating Current minute OHLCV
-            $this->CI->WsServer_model->update_current_minute_OHLCV( $coinpair_id, $trade_price, $trade_qty, $success_datetimestamp );            
+            $this->CI->WsServer_model->update_current_minute_OHLCV($coinpair_id, $trade_price, $trade_qty, $success_datetimestamp);
 
-            log_message('info', '--------DO BUY END--------'. $trade_qty);
+            log_message('info', '--------DO BUY END--------' . $trade_qty);
 
             /**
              * =================
@@ -302,19 +300,15 @@ class Buy extends Trade
                 );
 
                 $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_MARKET_SUMMARY,[]
+                    PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                    []
                 );
-            } catch (Exception $e) {
-
+            } catch (\Exception $e) {
             }
 
             return true;
-
         }
     }
-
-
-
 
     /**
      * @return bool
@@ -361,14 +355,14 @@ class Buy extends Trade
         // $qty    = $this->_convert_to_decimals($qty);
 
         // $totalAmount =  $this->_safe_math(" $price * $qty ");
-        $totalAmount = $this->DM->safe_multiplication( [ $price , $qty ]) ;
+        $totalAmount = $this->DM->safe_multiplication([$price, $qty]);
 
-        $totalFees   = $this->_calculateTotalFeesAmount( $price, $qty, $coinpair_id, 'BUY' );
-        
+        $totalFees   = $this->_calculateTotalFeesAmount($price, $qty, $coinpair_id, 'BUY');
+
         $balance_secondary     = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $this->user_id);
 
         // if ( $this->_safe_math_condition_check(" $balance_secondary->balance >= $totalAmount ") ) {
-        if ( $this->DM->isGreaterThanOrEqual($balance_secondary->balance, $totalAmount) ) {
+        if ($this->DM->isGreaterThanOrEqual($balance_secondary->balance, $totalAmount)) {
 
             $open_date = date('Y-m-d H:i:s');
 
@@ -393,11 +387,11 @@ class Buy extends Trade
 
                 log_message('debug', '===========LIMIT BUY ORDER STARTED===========');
 
-                log_message('debug', 'Order Id : '. $last_id);
-                log_message('debug', 'Price : '. $price);
-                log_message('debug', 'Qty : '. $qty);
-                log_message('debug', 'Total Amount : '. $totalAmount);                
-                log_message('debug', 'Total Fees : '. $totalFees);
+                log_message('debug', 'Order Id : ' . $last_id);
+                log_message('debug', 'Price : ' . $price);
+                log_message('debug', 'Qty : ' . $qty);
+                log_message('debug', 'Total Amount : ' . $totalAmount);
+                log_message('debug', 'Total Fees : ' . $totalFees);
 
                 // Event for order creator
                 $this->wss_server->_event_push(
@@ -412,11 +406,11 @@ class Buy extends Trade
                 try {
                     $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
-                    log_message("debug", "Start : Buyer Hold balance " );
+                    log_message("debug", "Start : Buyer Hold balance ");
 
                     $this->CI->WsServer_model->get_credit_hold_balance_from_balance_new($buytrade->user_id, $secondary_coin_id, $totalAmount);
 
-                    log_message("debug", "End : Buyer Hold balance " );
+                    log_message("debug", "End : Buyer Hold balance ");
 
                     $sellers = $this->CI->WsServer_model->get_sellers($price, $coinpair_id);
 
@@ -431,8 +425,20 @@ class Buy extends Trade
                             $buytrade = $this->CI->WsServer_model->get_order($last_id);
                             $this->_do_buy_trade($buytrade, $selltrade);
                         }
+                    } else {
+                        // No seller found in Popex
+                        // Find out on Binance
+                        log_message('debug', '-------------BEGIN BINANCE----------------------------');
+                        log_message('debug', 'No Seller found forward trade to Binance...');
 
-                    } // Salesquery ends here
+                        $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'LIMIT');
+                        if ($binanceExecuted === true) {
+                            log_message('debug', 'Trade executed :)');
+                        } else {
+                            log_message('debug', 'Could not execute');
+                        }
+                        log_message('debug', '--------------ENDING BINANCE---------------------------');
+                    }
 
                     // Transaction end
                     $this->DB->trans_complete();
@@ -453,7 +459,7 @@ class Buy extends Trade
                     } else {
                         $this->DB->trans_commit();
                     }
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     $this->DB->trans_rollback();
                     log_message('error', '===========LIMIT BUY ORDER FAILED===========');
 
@@ -491,14 +497,12 @@ class Buy extends Trade
                 $data['message'] = 'Buy order successfully placed.';
 
                 return $data;
-
             } else {
 
                 $data['isSuccess'] = false;
                 $data['message'] = 'Trade could not submitted.';
                 return $data;
             }
-
         } else {
 
             log_message('debug', 'Insufficient balance.');
@@ -543,7 +547,7 @@ class Buy extends Trade
         // PPT_USDT
         $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
         $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
-        
+
         $primary_coin_symbol = $this->CI->WsServer_model->get_coin_id_of_symbol($primary_coin_id);
 
         // Check balance
@@ -551,7 +555,7 @@ class Buy extends Trade
         $balance_sec    = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $this->user_id);
 
         // if ($this->_safe_math_condition_check(" $balance_sec->balance  <= 0 ")) {
-        if ($this->DM->isZeroOrNegative($balance_sec->balance) ) {
+        if ($this->DM->isZeroOrNegative($balance_sec->balance)) {
 
             $data['isSuccess'] = false;
             $data['message'] = 'Insufficient balance.';
@@ -559,7 +563,7 @@ class Buy extends Trade
         }
 
         $user_id = $this->user_id;
-    
+
         $count_sell_orders = $this->CI->WsServer_model->count_sell_orders_by_coin_id($coinpair_id);
 
         if ($count_sell_orders < 1) {
@@ -573,13 +577,13 @@ class Buy extends Trade
         }
 
         // $totalAmount = $this->_safe_math(" $last_price * $qty ");
-        $totalAmount = $this->DM->safe_multiplication([ $last_price , $qty  ]);
-    
+        $totalAmount = $this->DM->safe_multiplication([$last_price, $qty]);
+
         // if ($this->_safe_math_condition_check(" $balance_sec->balance  < $totalAmount ")) {
-        if ($this->DM->isLessThan($balance_sec->balance , $totalAmount)) {
+        if ($this->DM->isLessThan($balance_sec->balance, $totalAmount)) {
 
             // $maximumBuy = $this->_safe_math(" $balance_sec->balance / $last_price ");
-            $maximumBuy = $this->DM->safe_division([ $balance_sec->balance , $last_price ]);
+            $maximumBuy = $this->DM->safe_division([$balance_sec->balance, $last_price]);
 
             $data['isSuccess'] = false;
             $data['message'] = "Maximum $maximumBuy $primary_coin_symbol you can buy @ price $last_price.";
@@ -592,16 +596,16 @@ class Buy extends Trade
         foreach ($sellers as $selltrade) {
 
             // $max_buy_qty = $this->_safe_math(" LEAST( $selltrade->bid_qty_available, $remaining_qty ) ");
-            $max_buy_qty = $this->DM->smallest( $selltrade->bid_qty_available, $remaining_qty );
+            $max_buy_qty = $this->DM->smallest($selltrade->bid_qty_available, $remaining_qty);
 
             // $totalAmount = $this->_safe_math(" $selltrade->bid_price * $max_buy_qty ");
-            $totalAmount = $this->DM->safe_multiplication ([ $selltrade->bid_price , $max_buy_qty ]);
-    
+            $totalAmount = $this->DM->safe_multiplication([$selltrade->bid_price, $max_buy_qty]);
+
             /**
              * 
              * Calculate fees
              */
-            $totalFees = $this->_calculateTotalFeesAmount( $selltrade->bid_price , $max_buy_qty, $coinpair_id, 'BUY' );
+            $totalFees = $this->_calculateTotalFeesAmount($selltrade->bid_price, $max_buy_qty, $coinpair_id, 'BUY');
 
 
             $open_date = date('Y-m-d H:i:s');
@@ -659,7 +663,7 @@ class Buy extends Trade
                     } else {
                         $this->DB->trans_commit();
                     }
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     $this->DB->trans_rollback();
 
                     $tadata = array(
@@ -687,10 +691,10 @@ class Buy extends Trade
                         'user_id' => $this->user_id,
                     ]
                 );
-                
+
 
                 // $remaining_qty = $this->_safe_math(" $remaining_qty - $max_buy_qty ");
-                $remaining_qty = $this->DM->safe_minus([ $remaining_qty , $max_buy_qty ]);
+                $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_buy_qty]);
 
                 // if ($this->_safe_math_condition_check(" $remaining_qty <= 0 ")) {
                 if ($this->DM->isZeroOrNegative($remaining_qty)) {
@@ -700,25 +704,24 @@ class Buy extends Trade
             }
 
             // Updating SL sell orders status and make them available if price changed
-            $this->CI->WsServer_model->update_stop_limit_status ( $coinpair_id );
-
-        }// Sellers loop ends
+            $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+        } // Sellers loop ends
 
         // Create new order if qty remained
-        if ($this->DM->isGreaterThan( $remaining_qty, 0 ) ) {
+        if ($this->DM->isGreaterThan($remaining_qty, 0)) {
 
             $open_date = date('Y-m-d H:i:s');
             $last_trade_price = $this->CI->WsServer_model->get_last_trade_price($coinpair_id);
 
             // $totalAmount = $this->_safe_math(" $last_trade_price * $remaining_qty ");
-            $totalAmount = $this->DM->safe_multiplication( [ $last_trade_price , $remaining_qty ]);
-    
+            $totalAmount = $this->DM->safe_multiplication([$last_trade_price, $remaining_qty]);
+
             /**
              * 
              * Calculate fees
              */
-            $totalFees = $this->_calculateTotalFeesAmount( $last_trade_price , $remaining_qty, $coinpair_id, 'BUY' );
-            
+            $totalFees = $this->_calculateTotalFeesAmount($last_trade_price, $remaining_qty, $coinpair_id, 'BUY');
+
 
 
             $tdata['TRADES'] = (object) $tadata = array(
@@ -744,8 +747,21 @@ class Buy extends Trade
                     // HOLD PRIMARY
                     $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
+                    $buytrade = $this->CI->WsServer_model->get_order($last_id);
+
+                    log_message('debug', '-------------BEGIN BINANCE----------------------------');
+                    log_message('debug', 'No More Buyer found forward trade to Binance...');
+
+                    $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'MARKET');
+                    if ($binanceExecuted === true) {
+                        log_message('debug', 'Trade executed :)');
+                    } else {
+                        log_message('debug', 'Could not execute');
+                    }
+                    log_message('debug', '--------------ENDING BINANCE---------------------------');
+
                     // $boughtAmount = $this->_safe_math(" $qty - $remaining_qty ");
-                    $boughtAmount = $this->DM->safe_minus([ $qty , $remaining_qty ]);
+                    $boughtAmount = $this->DM->safe_minus([$qty, $remaining_qty]);
 
                     // Transaction end
                     $this->DB->trans_complete();
@@ -766,7 +782,7 @@ class Buy extends Trade
                     } else {
                         $this->DB->trans_commit();
                     }
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     $this->DB->trans_rollback();
 
                     $tadata = array(
@@ -797,17 +813,15 @@ class Buy extends Trade
 
                 $data['isSuccess'] = true;
                 $data['message'] = $this->_format_number($boughtAmount, $coin_details->primary_decimals) . ' Bought. ' .
-                $this->_format_number($remaining_qty, $coin_details->primary_decimals) . '  created open order at price ' .
-                $this->_format_number($last_trade_price, $coin_details->secondary_decimals);
+                    $this->_format_number($remaining_qty, $coin_details->primary_decimals) . '  created open order at price ' .
+                    $this->_format_number($last_trade_price, $coin_details->secondary_decimals);
                 return $data;
             } else {
                 $data['isSuccess'] = false;
                 $data['message'] = 'Could not create open buy order for ' .
-                $this->_format_number($remaining_qty, $coin_details->primary_decimals);
+                    $this->_format_number($remaining_qty, $coin_details->primary_decimals);
                 return $data;
-
             }
-
         } else {
             $this->wss_server->_event_push(
                 PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
@@ -878,14 +892,14 @@ class Buy extends Trade
         $last_price = $this->CI->WsServer_model->get_last_trade_price($coinpair_id);
 
         // if ($this->_safe_math_condition_check(" $stop >= $last_price ")) {
-        if ($this->DM->isGreaterThanOrEqual( $stop, $last_price )) {
+        if ($this->DM->isGreaterThanOrEqual($stop, $last_price)) {
 
 
             $is_take_profit = true;
             $is_stop_loss = false;
-        // } else if ($this->_safe_math_condition_check(" $stop <= $last_price ")) {
-        } else if ($this->DM->isLessThanOrEqual( $stop, $last_price )) {
-            
+            // } else if ($this->_safe_math_condition_check(" $stop <= $last_price ")) {
+        } else if ($this->DM->isLessThanOrEqual($stop, $last_price)) {
+
             $is_take_profit = false;
             $is_stop_loss = true;
         }
@@ -904,13 +918,13 @@ class Buy extends Trade
         $balance_sec = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $user_id);
 
         // $totalAmount = $this->_safe_math(" $qty * $limit ");
-        $totalAmount = $this->DM->safe_multiplication( [  $qty , $limit ]);
+        $totalAmount = $this->DM->safe_multiplication([$qty, $limit]);
 
 
         $availableAmount = $balance_sec->balance;
 
         // if ($this->_safe_math_condition_check(" $availableAmount < $totalAmount ")) {
-        if ($this->DM->isLessThan($availableAmount, $totalAmount ) ) {           
+        if ($this->DM->isLessThan($availableAmount, $totalAmount)) {
             // Low balance
             $qtyNeeded = $this->_safe_math(" $totalAmount - $availableAmount ");
             $data['isSuccess'] = false;
@@ -919,8 +933,8 @@ class Buy extends Trade
         }
 
         // Enought amount to place order without checking fees
-        
-        $totalFees   = $this->_calculateTotalFeesAmount( $limit, $qty, $coinpair_id, 'BUY' );
+
+        $totalFees   = $this->_calculateTotalFeesAmount($limit, $qty, $coinpair_id, 'BUY');
 
         $last_price = $this->CI->WsServer_model->get_last_trade_price($coinpair_id);
 
@@ -973,7 +987,7 @@ class Buy extends Trade
             } else {
                 $this->DB->trans_commit();
             }
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $this->DB->trans_rollback();
 
             if ($last_id) {
@@ -1020,7 +1034,7 @@ class Buy extends Trade
                 } else {
                     $this->DB->trans_commit();
                 }
-            } catch (Exception $e) {
+            } catch (\Exception $e) {
                 $this->DB->trans_rollback();
 
                 $tadata = array(
@@ -1060,5 +1074,4 @@ class Buy extends Trade
             return $data;
         }
     }
-
 }
