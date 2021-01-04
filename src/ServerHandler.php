@@ -200,13 +200,31 @@ class ServerHandler extends ServerBaseHandler
             $order_id = $rData['order_id'];
             $auth = $rData['ua'];
 
-            $data_send = [
-                'event' => $event,
-                'channel' => $channel,
-                'data' => $this->trade->cancel_order($order_id, $auth, $rData),
-            ];
+            // Checking if the order id is sent on external exchanges here, 
+            // If it is external order, need to send cancel event to the external exchange
 
-            $this->send_safe($recv, json_encode($data_send));
+            $isBinance = $this->CI->WsServer_model->isBinanceOrder($order_id);
+
+            log_message('debug', 'Order Id ' . $order_id);
+            log_message('debug', 'Is binance Order ' . $isBinance);
+
+            if ($isBinance) {
+
+                $data_send = [
+                    'event' => $event,
+                    'channel' => $channel,
+                    'data' => $this->trade->binance_cancel_order($order_id, $auth, $rData)
+                ];
+                $this->send_safe($recv, json_encode($data_send));
+            } else {
+
+                $data_send = [
+                    'event' => $event,
+                    'channel' => $channel,
+                    'data' => $this->trade->cancel_order($order_id, $auth, $rData),
+                ];
+                $this->send_safe($recv, json_encode($data_send));
+            }
         } else if ($event == 'exchange-init') {
 
             $market = $rData['market'];
@@ -344,6 +362,51 @@ class ServerHandler extends ServerBaseHandler
 
                                 // $this->public_event->_event_binance_orderbook_update($coinSymbolExp[0], $coinSymbolExp[1], $rData);
                             }
+                        }
+                    }
+                } else {
+                    $this->log->debug("It is not external Channel......");
+                }
+            } else {
+                $this->log->debug("It is not external Channel......");
+            }
+        } else if ($event == 'orderUpdate') {
+            $this->log->debug("Order Updated......");
+
+            //channel : external-order-update-binance
+            if ($this->_is_external_channel($channel)) {
+                // Check is external channel 
+
+                $channelExp = explode('-', $channel);
+                if (!empty($channelExp)) {
+                    // Check mendatory fields 
+
+                    // $this->log->debug($rData);
+
+                    // Check if symbol correctly given
+                    $exchange = $channelExp[3];
+                    if ($exchange) {
+                        // Check if Exchange field is available
+                        $exchange = strtoupper($exchange);
+                        $this->log->debug("Exchange : " . $exchange);
+                        if ($exchange == 'BINANCE') {
+                            $this->log->debug("Binance Order Detail : " . $rData);
+
+                            $allChannels = $this->external_event->_event_binance_order_update($rData);
+
+                            $this->public_event->_push_event_to_channels($allChannels);
+
+                            // foreach ($allChannels as $channelName => $oneChannel) {
+                            //     foreach ($oneChannel as $oneEvent) {
+                            //         $data_send = [
+                            //             'event' => $oneEvent['event'],
+                            //             'channel' => $channelName,
+                            //             'data' => $oneEvent['data'],
+                            //         ];
+                            //     }
+                            // }
+
+                            // $this->public_event->_event_binance_orderbook_update($coinSymbolExp[0], $coinSymbolExp[1], $rData);
                         }
                     }
                 } else {
