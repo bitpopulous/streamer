@@ -3,7 +3,7 @@
 namespace PopulousWSS;
 
 use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
+use PopulousWSS\Common\PopulousLogger;
 use PopulousWSS\Components\Connection;
 use PopulousWSS\Components\OriginComponent;
 use WSSC\Components\ServerConfig;
@@ -56,8 +56,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     public function __construct(
         WebSocket $handler,
         ServerConfig $config
-    )
-    {
+    ) {
         ini_set('default_socket_timeout', 5); // this should be >= 5 sec, otherwise there will be broken pipe - tested
 
         $this->handler = $handler;
@@ -66,8 +65,14 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         $this->maxClientsReqs = (getenv('SAME_IP_CONNECT_LIMIT')) ? getenv('SAME_IP_CONNECT_LIMIT') : $this->maxClientsReqs;
         $this->maxClientsReqsBlockTime = (getenv('SAME_IP_CONNECT_LIMIT_TIME')) ? getenv('SAME_IP_CONNECT_LIMIT_TIME') : $this->maxClientsReqsBlockTime;
 
-        $this->log = new Logger('ServerSocket');
+
+        $this->log = new PopulousLogger('ServerSocket');
         $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
+
+        $isProduction  = getenv('POPULOUS_LOGGER') == '0';
+        if ($isProduction) {
+            $this->log->setProduction();
+        }
     }
 
     /**
@@ -81,12 +86,17 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         $errno = null;
         $errorMessage = '';
 
-        $server = stream_socket_server("tcp://{$this->config->getHost()}:{$this->config->getPort()}", $errno,
-            $errorMessage);
+        $server = stream_socket_server(
+            "tcp://{$this->config->getHost()}:{$this->config->getPort()}",
+            $errno,
+            $errorMessage
+        );
 
         if ($server === false) {
-            throw new WebSocketException('Could not bind to socket: ' . $errno . ' - ' . $errorMessage . PHP_EOL,
-                CommonsContract::SERVER_COULD_NOT_BIND_TO_SOCKET);
+            throw new WebSocketException(
+                'Could not bind to socket: ' . $errno . ' - ' . $errorMessage . PHP_EOL,
+                CommonsContract::SERVER_COULD_NOT_BIND_TO_SOCKET
+            );
         }
 
         @cli_set_process_title($this->config->getProcessName());
@@ -132,10 +142,10 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
             //start reading and use a large timeout
             if (!stream_select($readSocks, $write, $except, $this->config->getStreamSelectTimeout())) {
                 // check any connection timeout or not if it's timeout then close from here as well.
-                $this->log->debug("Socket Timeout: ". $this->config->getStreamSelectTimeout());
+                $this->log->debug("Socket Timeout: " . $this->config->getStreamSelectTimeout());
                 $this->clearTimedoutRes($this->clients);
-//                throw new WebSocketException('something went wrong while selecting',
-//                    CommonsContract::SERVER_SELECT_ERROR);
+                //                throw new WebSocketException('something went wrong while selecting',
+                //                    CommonsContract::SERVER_SELECT_ERROR);
             }
 
             $this->totalClients = count($this->clients) + 1;
@@ -189,7 +199,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
                 $this->clientIpWithTime[][$client_ip] = date('Y-m-d H:i:s');
 
                 $requested_ip_list = array_count_values($this->clientIps);
-                if($requested_ip_list[$client_ip] > $this->maxClientsReqs) {
+                if ($requested_ip_list[$client_ip] > $this->maxClientsReqs) {
                     $validRequest = false;
                     $this->log->debug("Request from $client_ip more than $this->maxClientsReqs");
 
@@ -199,7 +209,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
                     $this->log->debug("Client IP: $client_ip, Minutes: $minutes, Max Block Time: $this->maxClientsReqsBlockTime");
                     if ($minutes >= $this->maxClientsReqsBlockTime) {
-                        $this->clientIps = array_diff($this->clientIps,[$client_ip]);
+                        $this->clientIps = array_diff($this->clientIps, [$client_ip]);
                         foreach ($this->clientIpWithTime as $key => $val) {
                             if (count(@$val[$client_ip]) > 0) {
                                 unset($this->clientIpWithTime[$key]);
@@ -295,7 +305,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         }
 
         $key = $match[1];
-        $this->handshakes[(int)$client] = $key;
+        $this->handshakes[(int) $client] = $key;
 
         // sending header according to WebSocket Protocol
         $secWebSocketAccept = base64_encode(sha1(trim($key) . self::HEADER_WEBSOCKET_ACCEPT_HASH, true));
@@ -332,8 +342,10 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     {
         $handShakeHeaders = self::HEADER_HTTP1_1 . self::HEADERS_EOL;
         if (empty($this->headersUpgrade)) {
-            throw new ConnectionException('Headers for upgrade handshake are not set' . PHP_EOL,
-                CommonsContract::SERVER_HEADERS_NOT_SET);
+            throw new ConnectionException(
+                'Headers for upgrade handshake are not set' . PHP_EOL,
+                CommonsContract::SERVER_HEADERS_NOT_SET
+            );
         }
 
         foreach ($this->headersUpgrade as $key => $header) {
@@ -364,8 +376,11 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
                     $this->handler->pathParams[$param] = substr($left, strpos($left, '/') + 1);
                 } else {
                     // eat both slashes
-                    $this->handler->pathParams[$param] = substr($left, strpos($left, '/') + 1,
-                        strpos($left, '/', 1) - 1);
+                    $this->handler->pathParams[$param] = substr(
+                        $left,
+                        strpos($left, '/') + 1,
+                        strpos($left, '/', 1) - 1
+                    );
                 }
 
                 // clear the declaration of parsed param
@@ -401,7 +416,8 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
      * @param string $headers
      * @return Array
      */
-    private function getXForwardedFor(string $headers){
+    private function getXForwardedFor(string $headers)
+    {
         $re = '/X-Forwarded-For\:\s(.\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}[,]?)+/';
         preg_match($re, $headers, $matches, PREG_OFFSET_CAPTURE, 0);
 
@@ -410,10 +426,10 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
             // $this->sendAndClose('No IP Detected.');
             return false;
         } else {
-            $xForwardedFor = str_replace('X-Forwarded-For:','',$matches[0][0] );
+            $xForwardedFor = str_replace('X-Forwarded-For:', '', $matches[0][0]);
             $xForwardedFor = explode(",", $xForwardedFor);
 
-            foreach( $xForwardedFor as &$a ) $a = trim($a);
+            foreach ($xForwardedFor as &$a) $a = trim($a);
 
             return $xForwardedFor;
         }

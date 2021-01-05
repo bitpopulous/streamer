@@ -3,7 +3,7 @@
 namespace PopulousWSS;
 
 use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
+use PopulousWSS\Common\PopulousLogger;
 use PopulousWSS\Common\PopulousWSSConstants;
 use WSSC\Contracts\ConnectionContract;
 use WSSC\Contracts\WebSocket;
@@ -24,9 +24,13 @@ class ServerBaseHandler extends WebSocket
 
     public function __construct()
     {
-        $this->log = new Logger('ServerSocket');
+        $this->log = new PopulousLogger('ServerSocket');
         $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
 
+        $isProduction  = getenv('POPULOUS_LOGGER') == '0';
+        if ($isProduction) {
+            $this->log->setProduction();
+        }
         $this->CI = &get_instance();
 
         $this->CI->load->model([
