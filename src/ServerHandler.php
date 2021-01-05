@@ -95,7 +95,7 @@ class ServerHandler extends ServerBaseHandler
 
     private function _reply_msg(ConnectionContract $recv, string $event, string $channel, array $rData)
     {
-        $this->log->debug("Reply Message , Event : " . $event . " Channel : " . $channel);
+        // $this->log->debug("Reply Message , Event : " . $event . " Channel : " . $channel);
 
         if ($event == 'orderbook-init') {
 
@@ -323,7 +323,7 @@ class ServerHandler extends ServerBaseHandler
             $this->send_safe($recv, json_encode($arr_return));
         } else if ($event == 'depthupdate') {
 
-            $this->log->debug("Depth Update......");
+            // $this->log->debug("Depth Update......");
 
             if ($this->_is_external_channel($channel)) {
                 // Check is external channel 
@@ -336,7 +336,7 @@ class ServerHandler extends ServerBaseHandler
 
                     $coinSymbol = $channelExp[2];
                     $coinSymbolExp = explode('_',  $coinSymbol);
-                    $this->log->debug("Coin Symbol : " . $coinSymbol);
+                    // $this->log->debug("Coin Symbol : " . $coinSymbol);
 
                     if (!empty($coinSymbolExp)) {
                         // Check if symbol correctly given
@@ -344,7 +344,7 @@ class ServerHandler extends ServerBaseHandler
                         if ($exchange) {
                             // Check if Exchange field is available
                             $exchange = strtoupper($exchange);
-                            $this->log->debug("Exchange : " . $exchange);
+                            // $this->log->debug("Exchange : " . $exchange);
                             if ($exchange == 'BINANCE') {
                                 $allChannels = $this->external_event->_event_binance_orderbook_update($coinSymbolExp[0], $coinSymbolExp[1], $rData);
 
@@ -371,7 +371,7 @@ class ServerHandler extends ServerBaseHandler
                 $this->log->debug("It is not external Channel......");
             }
         } else if ($event == 'orderUpdate') {
-            $this->log->debug("Order Updated......");
+            // $this->log->debug("Order Updated......");
 
             //channel : external-order-update-binance
             if ($this->_is_external_channel($channel)) {
@@ -390,7 +390,7 @@ class ServerHandler extends ServerBaseHandler
                         $exchange = strtoupper($exchange);
                         $this->log->debug("Exchange : " . $exchange);
                         if ($exchange == 'BINANCE') {
-                            $this->log->debug("Binance Order Detail : " . $rData);
+                            // $this->log->debug("Binance Order Detail : " . $rData);
 
                             $allChannels = $this->external_event->_event_binance_order_update($rData);
 
