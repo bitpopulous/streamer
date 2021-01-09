@@ -415,6 +415,23 @@ class ServerHandler extends ServerBaseHandler
             } else {
                 $this->log->debug("It is not external Channel......");
             }
+        } else if ($event == 'globalpriceupdate') {
+
+            if ($this->_is_external_channel($channel)) {
+                $channelExp = explode('-', $channel);
+                if (!empty($channelExp)) {
+                    $this->log->debug("Price update", $rData);
+
+                    $coinpairSymbol = end($channelExp);
+
+                    $allChannels = $this->external_event->_event_global_price_update($coinpairSymbol, $rData);
+
+                    $this->public_event->_push_event_to_channels($allChannels);
+                }
+            } else {
+
+                $this->log->debug("It is not external Channel......");
+            }
         }
     }
 }

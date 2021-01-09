@@ -291,4 +291,33 @@ class ExternalEvent extends ExternalChannel
 
         return $channels;
     }
+
+
+    private function _prepare_crypto_prices()
+    {
+
+        return [
+            'event' => 'crypto-prices',
+            'data' => $this->CI->WsServer_model->all_crypto_prices()
+        ];
+    }
+    public function _event_global_price_update($coinPairSymbol,  array $newPriceData)
+    {
+
+        $this->CI->WsServer_model->create_or_update_global_price($newPriceData['symbol'], $newPriceData['price'], $newPriceData['last_updated_ts']);
+        $coinPriceDetail = $this->CI->WsServer_model->get_global_price_by_symbol($newPriceData['symbol']);
+
+        $channels = [];
+
+        // TODO : Publish crypto_rates event to public channels
+
+        $cryptoRatesChannel = $this->CI->WsServer_model->get_crypto_rate_channel();
+
+        $channels[$cryptoRatesChannel] = [];
+        $channels[$cryptoRatesChannel][] = $this->_prepare_crypto_prices();
+
+        return $channels;
+
+        // log_message('debug', '_event_global_price_update');
+    }
 }
