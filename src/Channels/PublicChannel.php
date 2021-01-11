@@ -6,6 +6,8 @@ use PopulousWSS\Common\PopulousWSSConstants;
 use PopulousWSS\ServerHandler;
 use WSSC\Contracts\ConnectionContract;
 
+use PopulousWSS\Exchanges\Binance;
+
 class PublicChannel
 {
     public $channels;
@@ -22,6 +24,12 @@ class PublicChannel
         $this->CI->load->model([
             'WsServer_model',
         ]);
+
+        $this->CI->load->library("PopDecimalMath", null, 'decimalmaths');
+        $this->DM = $this->CI->decimalmaths;
+
+        $this->exchanges = [];
+        $this->exchanges['BINANCE'] = new Binance();
     }
 
     /**
