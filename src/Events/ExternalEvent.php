@@ -60,8 +60,8 @@ class ExternalEvent extends ExternalChannel
             }
         }
 
-        krsort($buyOrders); // Ascending 
-        krsort($sellOrders); // Descending
+        // krsort($buyOrders); // Ascending 
+        // krsort($sellOrders); // Descending
         $buyOrders = array_slice(array_values($buyOrders), 0, 30);
         $sellOrders = array_slice(array_values($sellOrders), 0, 30);
 
