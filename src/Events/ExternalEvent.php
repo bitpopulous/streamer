@@ -63,6 +63,9 @@ class ExternalEvent extends ExternalChannel
         krsort($buyOrders); // High to low 
         krsort($sellOrders); // High to low
 
+        $buyOrders = array_values($buyOrders);
+        $sellOrders = array_values($sellOrders);
+
         // $buyOrders = array_slice(array_values($buyOrders), 0, 30);
         // $sellOrders = array_slice(array_values($sellOrders), 0, 30);
 
