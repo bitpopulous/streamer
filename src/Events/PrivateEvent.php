@@ -162,7 +162,7 @@ class PrivateEvent extends PrivateChannel
 
     private function get_order_book($coin_id)
     {
-        $orderBook = $this->CI->WsServer_model->get_orders($coin_id);
+        $orderBook = $this->CI->WsServer_model->get_orders($coin_id, 50, 'array');
         if (isset($this->exchanges['BINANCE'])) {
             $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($coin_id);
             $symbol = strtoupper(str_replace('_', '', $symbol));

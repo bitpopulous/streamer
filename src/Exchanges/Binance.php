@@ -2,7 +2,7 @@
 
 namespace PopulousWSS\Exchanges;
 
-use PopulousWSS\common\Exchange;
+use PopulousWSS\Common\Exchange;
 use PopulousWSS\ServerHandler;
 use PopulousWSS\Trade\Trade;
 
