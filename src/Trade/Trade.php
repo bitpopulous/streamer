@@ -55,7 +55,7 @@ class Trade
         log_message("debug", "---------------------------------------------");
     }
 
-    protected function _buyer_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
+    public function _buyer_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
     {
 
         log_message("debug", "---------------------------------------------");
@@ -69,7 +69,7 @@ class Trade
         log_message("debug", "---------------------------------------------");
     }
 
-    protected function _seller_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
+    public function _seller_trade_balance_update($user_id, $primary_coin_id, $secondary_coin_id, $primary_amount, $secondary_amount)
     {
 
         log_message("debug", "---------------------------------------------");
@@ -499,7 +499,7 @@ class Trade
     /**
      * Binance BUY LIMIT TRADE Handling here
      */
-    public function binance_buy_trade($coinpair_details, $buytrade, $type = 'LIMIT')
+    public function binance_buy_trade($coinpair_details, $buytrade, $type = 'LIMIT', $order_id = null)
     {
         log_message("debug", "BINANCE BUY $type TRADE");
         $binanceSupportedSymbol =  strtoupper(str_replace('_', '', $coinpair_details->symbol));
@@ -512,7 +512,8 @@ class Trade
         // BUYER_PRICE >= BINANCE_SELLER_PRICE
 
         // $isPriceSatisfied = $this->DM->isGreaterThanOrEqual($buytrade->bid_price, $binanceBuyerPrice);
-        $isPriceSatisfied = true;
+        // $isPriceSatisfied = false; // It won't send order to binance
+        $isPriceSatisfied = true; // It will send order to binance
 
 
         if (!$isPriceSatisfied) {
@@ -531,7 +532,7 @@ class Trade
             // Link this order with binance order to make this updated on by binance trades update
 
             // Complete Order
-            $binanceOrderDetail = $this->CI->PopexBinance->do_buy_trade($binanceSupportedSymbol, $buytrade->bid_price, $buytrade->bid_qty_available, $type);
+            $binanceOrderDetail = $this->CI->PopexBinance->do_buy_trade($binanceSupportedSymbol, $buytrade->bid_price, $buytrade->bid_qty_available, $type, $order_id);
 
             if ($binanceOrderDetail == null) {
                 log_message("debug", "No response from Binance");
@@ -572,7 +573,7 @@ class Trade
             } else if ($binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_NEW) {
                 // Create linked record
                 log_message('info', "Create Linked record");
-                $linked = $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['status']);
+                $linked = $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
                 log_message('debug', $linked);
             } else if (
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_FILLED ||
@@ -580,7 +581,8 @@ class Trade
             ) {
 
                 // Create linked record
-                $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['status']);
+                // clientOrderId
+                $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
 
                 $completeQty = $binanceOrderDetail['executedQty'];
                 $price = $binanceOrderDetail['price'];
@@ -665,7 +667,7 @@ class Trade
     }
 
 
-    public function binance_sell_trade($coinpair_details, $selltrade, $type = "LIMIT")
+    public function binance_sell_trade($coinpair_details, $selltrade, $type = "LIMIT", $order_id = null)
     {
         log_message("debug", "BINANCE SELL $type TRADE");
 
@@ -679,7 +681,8 @@ class Trade
         // BUYER_PRICE >= BINANCE_SELLER_PRICE
 
         // $isPriceSatisfied = $this->DM->isLessThanOrEqual($selltrade->bid_price, $binanceBuyerPrice);
-        $isPriceSatisfied =  true;
+        // $isPriceSatisfied = false; // It won't send order to binance
+        $isPriceSatisfied = true; // It will send order to binance
 
 
         if (!$isPriceSatisfied) {
@@ -697,7 +700,7 @@ class Trade
 
             // Link this order with binance order to make this updated on by binance trades update
             // Complete Order
-            $binanceOrderDetail = $this->CI->PopexBinance->do_sell_trade($binanceSupportedSymbol, $selltrade->bid_price, $selltrade->bid_qty_available, $type);
+            $binanceOrderDetail = $this->CI->PopexBinance->do_sell_trade($binanceSupportedSymbol, $selltrade->bid_price, $selltrade->bid_qty_available, $type, $order_id);
 
             if ($binanceOrderDetail == null) {
                 log_message("debug", "No response from Binance");
@@ -737,7 +740,7 @@ class Trade
                 return;
             } else if ($binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_NEW) {
                 // Create linked record
-                $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['status']);
+                $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
                 // Update order, when 
             } else if (
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_FILLED ||
@@ -745,7 +748,7 @@ class Trade
             ) {
 
                 // Create linked record
-                $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['status']);
+                $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
 
                 $completeQty = $binanceOrderDetail['executedQty'];
                 $price = $binanceOrderDetail['price'];
@@ -861,111 +864,137 @@ class Trade
             $symbol =  str_replace('_', '', strtoupper($symbol));
 
             $popexBinanceOrderDetail = $this->CI->WsServer_model->getBinanceOrderByPopexOrderId($orderdata->id);
+            $binanceOrderStatusDetail = $this->PopexBinace->get_order_status($symbol, $popexBinanceOrderDetail['binance_order_id']);
 
-            if ($orderdata->bid_type == 'SELL') {
-                $binanceRes = $this->PopexBinace->cancel_sell_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
-            } else if ($orderdata->bid_type == 'BUY') {
-                $binanceRes = $this->PopexBinace->cancel_buy_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
+            log_message('debug', '------- BINANCE ORDER STATUS DETAILS -------');
+
+            if ($binanceOrderStatusDetail['status']) {
+                log_message('debug', json_encode($binanceOrderStatusDetail));
+                log_message('debug', 'STATUS : ' . $binanceOrderStatusDetail['status']);
             }
 
-            log_message('debug', 'Binance Cancel response');
-            log_message('debug', json_encode($binanceRes));
+            // Only allow if ORDER IS PENDING 
+            if (
+                $binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_NEW ||
+                $binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_PARTIALLY_FILLED
+            ) {
 
-            if ($binanceRes['status'] == BINANCE_ORDER_STATUS_CANCELED) {
-                // Successfully cancelled 
 
-                $canceltrade = array(
-                    'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
-                );
+                if ($orderdata->bid_type == 'SELL') {
+                    $binanceRes = $this->PopexBinace->cancel_sell_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
+                } else if ($orderdata->bid_type == 'BUY') {
+                    $binanceRes = $this->PopexBinace->cancel_buy_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
+                }
 
-                $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
-
-                if ($is_updated == false) {
-
-                    log_message('debug', 'Something wrong while canceling order');
-
+                if ($binanceRes == false) {
+                    log_message('debug', 'Binance Respond false');
                     $data['isSuccess'] = false;
-                    $data['message'] = 'Could not cancel the order';
+                    $data['message'] = 'Could not cancel Order';
                 } else {
-                    $currency_symbol = '';
-                    $currency_id = '';
-                    $coinpair_id = $orderdata->coinpair_id;
+                    log_message('debug', 'Binance Cancel response');
+                    log_message('debug', json_encode($binanceRes));
 
-                    log_message('debug', 'Order Type : ' . $orderdata->bid_type);
+                    if ($binanceRes['status'] == BINANCE_ORDER_STATUS_CANCELED) {
+                        // Successfully cancelled 
 
-                    $refund_amount = '';
-                    if ($orderdata->bid_type == 'SELL') {
-                        $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
-                        $refund_amount = $orderdata->bid_qty_available;
+                        $canceltrade = array(
+                            'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+                        );
+
+                        $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
+
+                        if ($is_updated == false) {
+
+                            log_message('debug', 'Something wrong while canceling order');
+
+                            $data['isSuccess'] = false;
+                            $data['message'] = 'Could not cancel the order';
+                        } else {
+                            $currency_symbol = '';
+                            $currency_id = '';
+                            $coinpair_id = $orderdata->coinpair_id;
+
+                            log_message('debug', 'Order Type : ' . $orderdata->bid_type);
+
+                            $refund_amount = '';
+                            if ($orderdata->bid_type == 'SELL') {
+                                $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
+                                $refund_amount = $orderdata->bid_qty_available;
+                            } else {
+                                $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
+                                $refund_amount = $this->DM->safe_multiplication([$orderdata->bid_qty_available, $orderdata->bid_price]);
+                            }
+
+                            log_message('debug', 'Refund Amount : ' . $refund_amount);
+
+                            $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
+                            //User Financial Log
+                            $tradecanceldata = array(
+                                'user_id' => $orderdata->user_id,
+                                'balance_id' => @$balance->id,
+                                'currency_id' => $currency_id,
+                                'transaction_type' => 'TRADE_CANCEL',
+                                'transaction_amount' => $refund_amount,
+                                'transaction_fees' => 0,
+                                'ip' => $ip_address,
+                                'date' => date('Y-m-d H:i:s'),
+                            );
+
+                            $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
+
+                            log_message('debug', '----- Crediting balance -----');
+
+                            $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                            // Release hold balance
+
+                            log_message('debug', '----- Releasing Hold balance -----');
+                            $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+
+                            $traderlog = array(
+                                'bid_id' => $orderdata->id,
+                                'bid_type' => $orderdata->bid_type,
+                                'complete_qty' => $orderdata->bid_qty_available,
+                                'bid_price' => $orderdata->bid_price,
+                                'complete_amount' => $refund_amount,
+                                'user_id' => $orderdata->user_id,
+                                'coinpair_id' => $orderdata->coinpair_id,
+                                'success_time' => date('Y-m-d H:i:s'),
+                                'fees_amount' => $orderdata->fees_amount,
+                                'available_amount' => $orderdata->amount_available,
+                                'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+                            );
+
+                            $this->CI->WsServer_model->insert_order_log($traderlog);
+
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                                [
+                                    'order_id' => $order_id,
+                                    'user_id' => $user_id,
+                                ]
+                            );
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
+                                [
+                                    'coin_id' => $orderdata->coinpair_id,
+                                ]
+                            );
+
+                            $data['isSuccess'] = true;
+                            $data['message'] = 'Request cancelled successfully.';
+                        }
                     } else {
-                        $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
-                        $refund_amount = $this->DM->safe_multiplication([$orderdata->bid_qty_available, $orderdata->bid_price]);
+                        // Something is wrong while cancelling order
+                        log_message('debug', 'Something wrong while canceling binance order');
+
+                        $data['isSuccess'] = false;
+                        $data['message'] = 'Could not cancel the binance order';
                     }
-
-                    log_message('debug', 'Refund Amount : ' . $refund_amount);
-
-                    $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
-                    //User Financial Log
-                    $tradecanceldata = array(
-                        'user_id' => $orderdata->user_id,
-                        'balance_id' => @$balance->id,
-                        'currency_id' => $currency_id,
-                        'transaction_type' => 'TRADE_CANCEL',
-                        'transaction_amount' => $refund_amount,
-                        'transaction_fees' => 0,
-                        'ip' => $ip_address,
-                        'date' => date('Y-m-d H:i:s'),
-                    );
-
-                    $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
-
-                    log_message('debug', '----- Crediting balance -----');
-
-                    $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
-                    // Release hold balance
-
-                    log_message('debug', '----- Releasing Hold balance -----');
-                    $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
-
-                    $traderlog = array(
-                        'bid_id' => $orderdata->id,
-                        'bid_type' => $orderdata->bid_type,
-                        'complete_qty' => $orderdata->bid_qty_available,
-                        'bid_price' => $orderdata->bid_price,
-                        'complete_amount' => $refund_amount,
-                        'user_id' => $orderdata->user_id,
-                        'coinpair_id' => $orderdata->coinpair_id,
-                        'success_time' => date('Y-m-d H:i:s'),
-                        'fees_amount' => $orderdata->fees_amount,
-                        'available_amount' => $orderdata->amount_available,
-                        'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
-                    );
-
-                    $this->CI->WsServer_model->insert_order_log($traderlog);
-
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                        [
-                            'order_id' => $order_id,
-                            'user_id' => $user_id,
-                        ]
-                    );
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                        [
-                            'coin_id' => $orderdata->coinpair_id,
-                        ]
-                    );
-
-                    $data['isSuccess'] = true;
-                    $data['message'] = 'Request cancelled successfully.';
                 }
             } else {
-                // Something is wrong while cancelling order
-                log_message('debug', 'Something wrong while canceling binance order');
 
                 $data['isSuccess'] = false;
-                $data['message'] = 'Could not cancel the binance order';
+                $data['message'] = 'Order is already executed';
             }
         }
 

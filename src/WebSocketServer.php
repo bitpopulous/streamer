@@ -34,6 +34,9 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
     private $handler;
     private $cureentConn;
 
+    // Keep connection resource of External exchanges
+    private $externalExchanges = [];
+
     // for the very 1st time must be true
     private $stepRecursion = true;
 
@@ -64,7 +67,6 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
         $this->setIsPcntlLoaded(extension_loaded('pcntl'));
         $this->maxClientsReqs = (getenv('SAME_IP_CONNECT_LIMIT')) ? getenv('SAME_IP_CONNECT_LIMIT') : $this->maxClientsReqs;
         $this->maxClientsReqsBlockTime = (getenv('SAME_IP_CONNECT_LIMIT_TIME')) ? getenv('SAME_IP_CONNECT_LIMIT_TIME') : $this->maxClientsReqsBlockTime;
-
 
         $this->log = new PopulousLogger('ServerSocket');
         $this->log->pushHandler(new StreamHandler(APPPATH . 'socket_log/socket.log'));
@@ -101,6 +103,19 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
         @cli_set_process_title($this->config->getProcessName());
         $this->eventLoop($server);
+    }
+
+    public function attachExternalExchange(Connection $connection, $name = null)
+    {
+        if ($name == null) {
+            $this->externalExchanges['external_' + count($this->externalExchanges) + 1] = $connection;
+        } else {
+            $name = strtoupper($name);
+            if (!isset($this->externalExchanges[$name])) {
+                $this->externalExchanges[$name] = $connection;
+            } else {
+            }
+        }
     }
 
     /**
@@ -192,7 +207,13 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
             // important to read from headers here coz later client will change and there will be only msgs on pipe
             $headers = fread($newClient, self::HEADER_BYTES_READ);
-            $client_ip = current($this->getXForwardedFor($headers));
+
+            $client_ip = false;
+            $xForwardedFor = $this->getXForwardedFor($headers);
+            if (!is_bool($xForwardedFor)) {
+                $client_ip = current($this->getXForwardedFor($headers)) || null;
+            }
+
 
             if ($client_ip) {
                 $this->clientIps[] = $client_ip;

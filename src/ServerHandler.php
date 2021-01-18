@@ -18,9 +18,9 @@ class ServerHandler extends ServerBaseHandler
     protected $private_event;
     protected $external_event;
 
-    protected $buy;
-    protected $sell;
-    protected $trade;
+    public $buy;
+    public $sell;
+    public $trade;
 
     public function __construct()
     {
@@ -95,7 +95,6 @@ class ServerHandler extends ServerBaseHandler
 
     private function _reply_msg(ConnectionContract $recv, string $event, string $channel, array $rData)
     {
-        // $this->log->debug("Reply Message , Event : " . $event . " Channel : " . $channel);
 
         if ($event == 'orderbook-init') {
 
@@ -206,9 +205,9 @@ class ServerHandler extends ServerBaseHandler
             $isBinance = $this->CI->WsServer_model->isBinanceOrder($order_id);
 
             log_message('debug', 'Order Id ' . $order_id);
-            log_message('debug', 'Is binance Order ' . $isBinance);
 
             if ($isBinance) {
+                log_message('debug', 'IT IS a binance Order ');
 
                 $data_send = [
                     'event' => $event,
@@ -217,6 +216,7 @@ class ServerHandler extends ServerBaseHandler
                 ];
                 $this->send_safe($recv, json_encode($data_send));
             } else {
+                log_message('debug', 'IT IS NOT a binance Order ');
 
                 $data_send = [
                     'event' => $event,
@@ -349,18 +349,6 @@ class ServerHandler extends ServerBaseHandler
                                 $allChannels = $this->external_event->_event_binance_orderbook_update($coinSymbolExp[0], $coinSymbolExp[1], $rData);
 
                                 $this->public_event->_push_event_to_channels($allChannels);
-
-                                // foreach ($allChannels as $channelName => $oneChannel) {
-                                //     foreach ($oneChannel as $oneEvent) {
-                                //         $data_send = [
-                                //             'event' => $oneEvent['event'],
-                                //             'channel' => $channelName,
-                                //             'data' => $oneEvent['data'],
-                                //         ];
-                                //     }
-                                // }
-
-                                // $this->public_event->_event_binance_orderbook_update($coinSymbolExp[0], $coinSymbolExp[1], $rData);
                             }
                         }
                     }
@@ -370,9 +358,9 @@ class ServerHandler extends ServerBaseHandler
             } else {
                 $this->log->debug("It is not external Channel......");
             }
-        } else if ($event == 'orderUpdate') {
-            // $this->log->debug("Order Updated......");
-
+        } else if ($event == 'orderupdate') {
+            $this->log->debug("Reply Message , Event : " . $event . " Channel : " . $channel);
+            $this->log->debug("Order Updated......");
             //channel : external-order-update-binance
             if ($this->_is_external_channel($channel)) {
                 // Check is external channel 
@@ -390,7 +378,7 @@ class ServerHandler extends ServerBaseHandler
                         $exchange = strtoupper($exchange);
                         $this->log->debug("Exchange : " . $exchange);
                         if ($exchange == 'BINANCE') {
-                            // $this->log->debug("Binance Order Detail : " . $rData);
+                            $this->log->debug("Binance Order Detail : " . json_encode($rData));
 
                             $allChannels = $this->external_event->_event_binance_order_update($rData);
 
