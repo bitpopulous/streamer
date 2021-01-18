@@ -71,112 +71,6 @@ class PublicEvent extends PublicChannel
     }
 
 
-    private function _merge_binance_orderbook($popexOrderbook, $binanceOrderbook)
-    {
-        // TOdo : Merge 2 orderbook
-
-        $buyOrders = [];
-        $sellOrders = [];
-        $popexBuyers = $popexOrderbook['buy_orders']; // [ 'all_users' => '', 'bid_price' => '', 'bid_type' => 'BUY', 'total_price' => '', 'total_qty' => ''  ]
-        $popexSellers = $popexOrderbook['sell_orders']; // [ 'all_users' => '', 'bid_price' => '', 'bid_type' => 'BUY', 'total_price' => '', 'total_qty' => ''  ]
-        $binanceBuyers = $binanceOrderbook['bids']; //  [ 'price' , 'amount' ,'timestamp' ] eg: [ "23815.02000000" , "0.02404400", 7249895760]
-        krsort($binanceBuyers); // high to low
-
-
-        log_message('debug', "==================MERGING ORDER BOOK START=====================");
-        log_message('debug', "Popex Buyers");
-        log_message('debug', json_encode($popexBuyers));
-
-        log_message('debug', "Popex Sellers");
-        log_message('debug', json_encode($popexSellers));
-
-        foreach ($binanceBuyers as $price => $qty) {
-            $totalPrice = $this->DM->safe_multiplication([$price, $qty]);
-            $buyOrders[$price] = ['all_users' => '', 'bid_price' => $price, 'bid_type' => 'BUY', 'total_qty' => $qty, 'total_price' => $totalPrice];
-        }
-
-        $binanceSellers = $binanceOrderbook['asks'];
-        krsort($binanceSellers); // High to low
-
-        log_message('debug', "Binance Sellers");
-        log_message('debug', json_encode($binanceSellers));
-
-        log_message('debug', "Binance Buyers");
-        log_message('debug', json_encode($binanceBuyers));
-
-        foreach ($binanceSellers as $price => $qty) {
-            $totalPrice = $this->DM->safe_multiplication([$price, $qty]);
-            $sellOrders[$price] = ['all_users' => '', 'bid_price' => $price, 'bid_type' => 'SELL', 'total_qty' => $qty, 'total_price' => $totalPrice];
-        }
-
-
-        foreach ($popexBuyers as $_pb) {
-
-            if (!isset($buyOrders[$_pb['bid_price']])) {
-                $buyOrders[$_pb['bid_price']] = $_pb;
-            } else {
-                // It's exist, Calculate it
-
-                log_message("debug", "Popex BUY order");
-                log_message("debug", json_encode($_pb));
-
-                log_message('debug', "Before merge one buyer");
-                log_message('debug', json_encode($buyOrders[$_pb['bid_price']]));
-
-                $buyOrders[$_pb['bid_price']]['total_qty'] = $this->DM->safe_add([$buyOrders[$_pb['bid_price']]['total_qty'], $_pb['total_qty']]);
-                $buyOrders[$_pb['bid_price']]['total_price'] = $this->DM->safe_add([$buyOrders[$_pb['bid_price']]['total_price'], $_pb['total_price']]);
-
-                log_message('debug', "After merge one buyer");
-                log_message('debug', json_encode($buyOrders[$_pb['bid_price']]));
-            }
-        }
-
-
-        foreach ($popexSellers as $_ps) {
-            if (!isset($sellOrders[$_ps['bid_price']])) {
-                $sellOrders[$_ps['bid_price']] = $_ps;
-            } else {
-                // It's exist, Calculate it
-                log_message("debug", "Popex SELL order");
-                log_message("debug", json_encode($_ps));
-
-                log_message('debug', "Before merge one seller");
-                log_message('debug', json_encode($sellOrders[$_ps['bid_price']]));
-
-                $sellOrders[$_ps['bid_price']]['total_qty'] = $this->DM->safe_add([$sellOrders[$_ps['bid_price']]['total_qty'], $_ps['total_qty']]);
-                $sellOrders[$_ps['bid_price']]['total_price'] = $this->DM->safe_add([$sellOrders[$_ps['bid_price']]['total_price'], $_ps['total_price']]);
-
-                log_message('debug', "After merge one seller");
-                log_message('debug', json_encode($sellOrders[$_ps['bid_price']]));
-            }
-        }
-
-
-        krsort($buyOrders); // Hight to low
-        krsort($sellOrders); // High to low
-
-
-        log_message('debug', "MERGED BUY ORDERS : ");
-        log_message('debug', json_encode($buyOrders));
-
-        log_message('debug', "MERGED SELL ORDERS : ");
-        log_message('debug', json_encode($sellOrders));
-
-
-        $buyOrders = array_values($buyOrders);
-        $sellOrders = array_values($sellOrders);
-
-        // $buyOrders = array_slice($buyOrders, 0, 30);
-        // $sellOrders = array_slice($sellOrders, 0, 30);
-
-
-        // $popexSellers = $popexOrderbook['sell_orders'];
-        // $binanceSellers = $binanceOrderbook['ask'];  
-
-
-        return ['buy_orders' => $buyOrders, 'sell_orders' => $sellOrders];
-    }
-
     private function get_order_book($coin_id)
     {
         $orderBook = $this->CI->WsServer_model->get_orders($coin_id, 50, 'array');
@@ -186,7 +80,7 @@ class PublicEvent extends PublicChannel
             $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBook($symbol);
             // $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBookRes();
 
-            $orderBook = $this->_merge_binance_orderbook($orderBook,  $binanceOrderbook);
+            $orderBook = $this->CI->WsServer_model->merge_orderbook($orderBook['buy_orders'], $orderBook['sell_orders'],  $binanceOrderbook['bids'], $binanceOrderbook['asks']);
         }
 
         return $orderBook;

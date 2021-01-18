@@ -3,8 +3,8 @@
 namespace PopulousWSS;
 
 use Monolog\Handler\StreamHandler;
-use PopulousWSS\Common\PopulousLogger;
 use PopulousWSS\Common\PopulousWSSConstants;
+use PopulousWSS\Common\PopulousLogger;
 use WSSC\Contracts\ConnectionContract;
 use WSSC\Contracts\WebSocket;
 use WSSC\Exceptions\WebSocketException;
@@ -31,6 +31,7 @@ class ServerBaseHandler extends WebSocket
         if ($isProduction) {
             $this->log->setProduction();
         }
+
         $this->CI = &get_instance();
 
         $this->CI->load->model([
@@ -49,7 +50,7 @@ class ServerBaseHandler extends WebSocket
     {
         $_decoded_msg = json_decode($msg, true);
         if (is_array($_decoded_msg)) {
-
+            // $this->log->debug($msg);
             if (isset($_decoded_msg['event']) && isset($_decoded_msg['channel'])) {
 
                 $event = strtolower($_decoded_msg['event']);

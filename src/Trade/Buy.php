@@ -431,7 +431,7 @@ class Buy extends Trade
                         log_message('debug', '-------------BEGIN BINANCE----------------------------');
                         log_message('debug', 'No Seller found forward trade to Binance...');
 
-                        $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'LIMIT');
+                        $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'LIMIT', $buytrade->id);
                         if ($binanceExecuted === true) {
                             log_message('debug', 'Trade executed :)');
                         } else {
@@ -752,7 +752,7 @@ class Buy extends Trade
                     log_message('debug', '-------------BEGIN BINANCE----------------------------');
                     log_message('debug', 'No More Buyer found forward trade to Binance...');
 
-                    $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'MARKET');
+                    $binanceExecuted = $this->binance_buy_trade($coin_details, $buytrade, 'MARKET', $buytrade->id);
                     if ($binanceExecuted === true) {
                         log_message('debug', 'Trade executed :)');
                     } else {

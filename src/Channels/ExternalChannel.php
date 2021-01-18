@@ -14,6 +14,7 @@ class ExternalChannel extends PublicChannel
 
 	public function __construct(ServerHandler $server)
 	{
+		parent::__construct($server);
 		$this->wss_server = $server;
 
 		// $this->channels = [];
@@ -23,7 +24,7 @@ class ExternalChannel extends PublicChannel
 			'WsServer_model',
 		]);
 
-		$this->CI->load->library("PopDecimalMath", null, 'decimalmaths');
+		$this->CI->load->library("PopDecimalMath", null, 'DM');
 		$this->DM = $this->CI->decimalmaths;
 	}
 
