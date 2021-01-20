@@ -30,4 +30,11 @@ interface PopulousWSSConstants
     public const EVENT_TRADE_CREATED = 3;
     public const EVENT_MARKET_SUMMARY = 4;
     public const EVENT_EXTERNAL_ORDERBOOK_UPDATE = 5;
+
+    public const OB_IDS = 'ids';
+    public const OB_TYPE = 't';
+    public const OB_PRICE = 'p';
+    public const OB_USER_IDS = 'ui';
+    public const OB_TOTAL_QTY = 'q';
+    public const OB_TOTAL_AMOUNT = 'a';
 }

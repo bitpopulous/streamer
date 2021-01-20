@@ -993,13 +993,170 @@ class Trade
                 }
             } else {
 
-                $data['isSuccess'] = false;
-                $data['message'] = 'Order is already executed';
+                if ($binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_FILLED) {
+                    // Must do work here
+                    // It's already executed but sometime popex doesn't get filled event 
+                    // Need to updae order with filled and do the rest of process of credit debit balances and trade history as well
+
+                    $tradeDetail = (array) $orderdata;
+
+                    $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($tradeDetail['coinpair_id']);
+                    $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($tradeDetail['coinpair_id']);
+
+                    $remainingQtyBefore = $tradeDetail['bid_qty_available'];
+                    // $remainingQtyAfter = $this->CI->DM->safe_minus([$remainingQtyBefore, $quantity]);
+
+                    $this->_binance_order_interal_update($primary_coin_id, $secondary_coin_id, $tradeDetail['bid_type'], $tradeDetail, $remainingQtyBefore, $tradeDetail['bid_price'], PopulousWSSConstants::BID_COMPLETE_STATUS, time());
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Order is already executed';
+                } else {
+                    $data['isSuccess'] = false;
+                    $data['message'] = 'Could not cancel order';
+                }
             }
         }
 
         log_message('debug', '--------DO CANCEL BINANCE ORDER FINISHED--------');
 
         return $data;
+    }
+
+
+    /**
+     * Binance order internal update 
+     */
+    public function _binance_order_interal_update($primary_coin_id, $secondary_coin_id,  $side, $tradeDetail, $quantity, $price, $newPopexStatus, $success_datetimestamp)
+    {
+
+        $success_datetime = date('Y-m-d H:i:s', $success_datetimestamp);
+
+        $trade_amount = $this->DM->safe_multiplication([$price, $quantity]);
+
+        if ($side == 'BUY') {
+            // Buy order
+            // ORDER UPDATE
+            $buytrade = (object) $tradeDetail;
+
+            $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
+            $buyer_av_qty_after_trade = $this->DM->safe_minus([$buytrade->bid_qty_available, $quantity]);
+
+            log_message('debug', 'buyer_av_bid_amount_after_trade : ' . $buyer_av_bid_amount_after_trade);
+            log_message('debug', 'buyer_av_qty_after_trade : ' . $buyer_av_qty_after_trade);
+
+
+            $buyupdate = array(
+                'bid_qty_available' => $buyer_av_qty_after_trade,
+                'amount_available' => $buyer_av_bid_amount_after_trade,
+                'status' => $newPopexStatus,
+            );
+
+            log_message('debug', 'BUY TRADE UPDATE -> ' . json_encode($buyupdate));
+
+
+            $buytraderlog = array(
+                'bid_id' => $buytrade->id,
+                'bid_type' => $buytrade->bid_type,
+                'complete_qty' => $quantity,
+                'bid_price' => $price,
+                'complete_amount' => $trade_amount,
+                'user_id' => $buytrade->user_id,
+                'coinpair_id' => $buytrade->coinpair_id,
+                'success_time' => $success_datetime,
+                'fees_amount' => 0,
+                'available_amount' => $buyer_av_qty_after_trade,
+                'status' =>  $newPopexStatus,
+            );
+
+
+            log_message('debug', 'debug', 'BUY TRADER LOG -> ' . json_encode($buytraderlog));
+
+            $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
+
+            // BALANCE UPDATE
+            $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $quantity, $trade_amount);
+
+            $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
+
+            $this->CI->WsServer_model->update_current_minute_OHLCV($buytrade->coinpair_id, $price, $quantity, $success_datetimestamp);
+        } else if ($side == 'SELL') {
+            // Sell orders
+
+            $selltrade = (object) $tradeDetail;
+
+            $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
+            $seller_av_qty_after_trade = $this->DM->safe_minus([$selltrade->bid_qty_available, $quantity]);
+
+            log_message('debug', 'seller_av_bid_amount_after_trade : ' . $seller_av_bid_amount_after_trade);
+            log_message('debug', 'seller_av_qty_after_trade : ' . $seller_av_qty_after_trade);
+
+            $sellupdate = array(
+                'bid_qty_available' => $seller_av_qty_after_trade,
+                'amount_available' => $seller_av_bid_amount_after_trade,
+                'status' => $newPopexStatus,
+            );
+
+            log_message('debug', 'SELL TRADE UPDATE -> ' . json_encode($sellupdate));
+
+            $selltraderlog = array(
+                'bid_id' => $selltrade->id,
+                'bid_type' => $selltrade->bid_type,
+                'complete_qty' => $quantity,
+                'bid_price' => $price,
+                'complete_amount' => $trade_amount,
+                'user_id' => $selltrade->user_id,
+                'coinpair_id' => $selltrade->coinpair_id,
+                'success_time' => $success_datetime,
+                'fees_amount' => 0,
+                'available_amount' => $seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
+                'status' =>  PopulousWSSConstants::BID_PENDING_STATUS,
+            );
+            log_message('debug', 'SELL TRADER LOG ->' . json_encode($selltraderlog));
+
+            $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
+
+            $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
+            // BALANCE UPDATE
+            $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $quantity, $trade_amount);
+
+            // Updating Current minute OHLCV
+            $this->CI->WsServer_model->update_current_minute_OHLCV($selltrade->coinpair_id, $price, $quantity, $success_datetimestamp);
+        }
+
+        log_message('debug', 'Log ID : ' . $log_id);
+
+
+        /**
+         * =================
+         * EVENTS
+         * =================
+         */
+
+        try {
+            // EVENTS for both party
+            $this->wss_server->_event_push(
+                PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                [
+                    'order_id' => $tradeDetail['id'],
+                    'user_id' => $tradeDetail['user_id'],
+                ]
+            );
+
+            if ($log_id != null) {
+
+                // EVENT for single trade
+                $this->wss_server->_event_push(
+                    PopulousWSSConstants::EVENT_TRADE_CREATED,
+                    [
+                        'log_id' => $log_id,
+                    ]
+                );
+            }
+
+            $this->wss_server->_event_push(
+                PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                []
+            );
+        } catch (\Exception $e) {
+        }
     }
 }
