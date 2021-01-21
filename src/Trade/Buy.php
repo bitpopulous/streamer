@@ -24,8 +24,64 @@ class Buy extends Trade
 
             log_message('info', '--------DO BUY START--------');
 
+            /**
+             * IMPORTANT :
+             * Popex orders + External sent orders
+             * Make sure the external seller order you are going to use to do trade, it's not a FILLED and have updated qty from external exchange
+             * If order is correctly updated (by checking external order detail), use the order as it is and cancel the order on external exchange  after successfull trade here
+             * If order is not correctly updated (by checking external order detail), update the order qty immidiately and cancel the order on external exchange after successfuls trade here
+             * 
+             */
+
+            log_message('debug', '----------- EXTERNAL EXCHANGE PRE-CHECKING STARTS -----------');
+
+            $isBinanceBuyOrder  = $this->CI->WsServer_model->isBinanceOrderAndActiveStatus($buytrade->id);
+            $isBinanceSellOrder = $this->CI->WsServer_model->isBinanceOrderAndActiveStatus($selltrade->id);
 
             $coinpair_id = intval($buytrade->coinpair_id);
+            $symbol = $this->CI->WsServer_model->get_coinpair_symbol_of_coinpairId($coinpair_id);
+            $symbol =  str_replace('_', '', strtoupper($symbol));
+
+            log_message("debug", "Coin pair : " . $symbol);
+
+            if ($isBinanceBuyOrder) {
+                log_message('debug', 'It is a BINANCE BUY order');
+                // GET  sent Liquidity back to Popex from BINANCE
+                // CANCEL THE ORDER ON BINANCE
+                // If Binance order is already filled, do not use this order. (This is rare case but can be happen)
+                // Cancel order on binance 
+                // : Keep in mind if you cancel order on binance, external event will come to credit back amount, which MUST not be happen here
+                // : To prevent credit back on cancellation here, Unlink this order as a binance order from popex_binance_orders before you send cancellation to binance
+
+                $isUnlinkedAndCancelled = $this->_binance_order_unlink_and_cancel($buytrade->id, $symbol);
+
+                if ($isUnlinkedAndCancelled == false) {
+                    log_message('debug', "Can not use this buy trade as internal popex trading.");
+                    return;
+                } else {
+                    log_message('debug', "Buy order Unlinked");
+                }
+            } else {
+                log_message('debug', 'It is a POPEX BUY order');
+            }
+
+            if ($isBinanceSellOrder) {
+                log_message('debug', 'It is a BINANCE SELL order');
+
+                $isUnlinkedAndCancelled = $this->_binance_order_unlink_and_cancel($selltrade->id, $symbol);
+
+                if ($isUnlinkedAndCancelled == false) {
+                    log_message('debug', "Can not use this sell trade as internal popex trading.");
+                    return;
+                } else {
+                    log_message('debug', "Sell order Unlinked");
+                }
+            } else {
+                log_message('debug', 'It is a POPEX SELL order');
+            }
+
+            log_message('debug', '----------- EXTERNAL EXCHANGE PRE-CHECKING ENDS -----------');
+
 
             $primary_coin_id    = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
             $secondary_coin_id  = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
@@ -37,22 +93,6 @@ class Buy extends Trade
             $primary_coin_decimal   = $ps_decimals['primary_decimals'];
             $secondary_coin_decimal = $ps_decimals['secondary_decimals'];
 
-            // $calcQuery = "SELECT t.*, (SELECT( CAST(  t.trade_qty * t.trade_price  as DECIMAL( 24, $secondary_coin_decimal ) )  ) ) as trade_amount  
-            //               from ( SELECT LEAST( $selltrade->bid_qty_available, $buytrade->bid_qty_available ) as trade_qty, LEAST(  $selltrade->bid_price, $buytrade->bid_price  ) as trade_price ) as t";
-
-
-
-            // $calcResult     = $this->CI->WsServer_model->dbQuery( $calcQuery );
-
-            // if( $calcResult == null ){
-            //     return false;
-            // }
-
-            // $calcResult = $calcResult->row();
-
-            // $trade_qty      = $calcResult->trade_qty;
-            // $trade_price    = $calcResult->trade_price;
-            // $trade_amount   = $calcResult->trade_amount;
 
             $trade_qty      = $this->DM->smallest($selltrade->bid_qty_available, $buytrade->bid_qty_available);
             $trade_price    = $this->DM->smallest($selltrade->bid_price, $buytrade->bid_price);
@@ -198,19 +238,6 @@ class Buy extends Trade
 
             // Credit fees to exchange account
 
-            /*
-            $calcQuery = " SELECT 
-                ( $buytrade->amount_available  - $trade_amount ) as buyer_av_bid_amount_after_trade,
-                ( $selltrade->amount_available  - $trade_amount ) as seller_av_bid_amount_after_trade,
-                ( $buytrade->bid_qty_available - $trade_qty ) as buyer_av_qty_after_trade,
-                ( $selltrade->bid_qty_available - $trade_qty ) as seller_av_qty_after_trade,
-                ( ($buytrade->bid_qty_available - $trade_qty) <= 0 ) as is_buyer_qty_fulfilled,
-                ( ( $selltrade->bid_qty_available - $trade_qty ) <= 0  ) as is_seller_qty_fulfilled
-            ";
-
-            $calcResult     = $this->CI->WsServer_model->dbQuery( $calcQuery )->row();
-
-            */
 
             $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
             $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
@@ -417,6 +444,7 @@ class Buy extends Trade
                     if ($sellers) {
 
                         log_message('debug', 'Sellers found');
+
 
                         // BUYER  : P_UP S_DN
                         // SELLER : P_DN S_UP

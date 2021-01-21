@@ -860,10 +860,20 @@ class Trade
         } else {
 
             $symbol = $this->CI->WsServer_model->get_coinpair_symbol_of_coinpairId($orderdata->coinpair_id);
-
             $symbol =  str_replace('_', '', strtoupper($symbol));
 
+            log_message('debug', "Coinpair : " . $symbol);
+
             $popexBinanceOrderDetail = $this->CI->WsServer_model->getBinanceOrderByPopexOrderId($orderdata->id);
+
+            if ($popexBinanceOrderDetail['status'] == PopulousWSSConstants::EXTERNAL_ORDER_INACTIVE_STATUS) {
+                log_message("debug", "Order already unlinked with binance");
+                $data['isSuccess'] = true;
+                $data['message'] = 'Order is already cancelled';
+            }
+
+            log_message('debug', 'Linked order detail : ' . json_encode($popexBinanceOrderDetail));
+
             $binanceOrderStatusDetail = $this->PopexBinace->get_order_status($symbol, $popexBinanceOrderDetail['binance_order_id']);
 
             log_message('debug', '------- BINANCE ORDER STATUS DETAILS -------');
@@ -902,6 +912,8 @@ class Trade
                         );
 
                         $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
+
+                        $this->CI->WsServer_model->unlinkPopexBinanceOrder($order_id);
 
                         if ($is_updated == false) {
 
@@ -1009,9 +1021,17 @@ class Trade
                     $this->_binance_order_interal_update($primary_coin_id, $secondary_coin_id, $tradeDetail['bid_type'], $tradeDetail, $remainingQtyBefore, $tradeDetail['bid_price'], PopulousWSSConstants::BID_COMPLETE_STATUS, time());
                     $data['isSuccess'] = false;
                     $data['message'] = 'Order is already executed';
-                } else {
-                    $data['isSuccess'] = false;
-                    $data['message'] = 'Could not cancel order';
+                } else if ($binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_CANCELED) {
+
+                    // These are rare case, we will be only updating order status to cancel and no credit back should be happen here
+                    $canceltrade = array(
+                        'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+                    );
+
+                    $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
+
+                    $data['isSuccess'] = true;
+                    $data['message'] = 'Request cancelled successfully.';
                 }
             }
         }
@@ -1158,5 +1178,80 @@ class Trade
             );
         } catch (\Exception $e) {
         }
+    }
+
+    /**
+     * This will bring back sent binance liquidity to popex back
+     * It will unlink the popex order with binance order Id
+     * and will cancel the binance order 
+     */
+    public function _binance_order_unlink_and_cancel($popexOrderId, $symbol)
+    {
+
+        log_message('debug', '-----------------------------------------------------');
+        log_message('debug', 'Binance Order Unlink and Cancellation started');
+        log_message('debug', '-----------------------------------------------------');
+
+        $result = false;
+
+        $binanceOrderDetail = $this->CI->WsServer_model->getBinanceOrderByPopexOrderId($popexOrderId);
+
+        if ($binanceOrderDetail['status'] == PopulousWSSConstants::EXTERNAL_ORDER_INACTIVE_STATUS) {
+
+            log_message('debug', "Binance order is already Unlinked.. ");
+
+            $result = true;
+            return $result;
+        }
+
+        log_message('debug', "Binance Order Id " . $binanceOrderDetail['binance_order_id']);
+
+        $isUnlinked = $this->CI->WsServer_model->unlinkPopexBinanceOrder($popexOrderId);
+        $binanceOrderDetailAfter = $this->CI->WsServer_model->getBinanceOrderByPopexOrderId($popexOrderId);
+
+        log_message('debug', "Unlinked ? : ");
+        log_message('debug', $isUnlinked ? 'Yes' : 'No');
+
+        if ($isUnlinked && $binanceOrderDetailAfter['status'] == PopulousWSSConstants::EXTERNAL_ORDER_INACTIVE_STATUS) {
+            // Send cancellation order to binance
+            $binanceCancelRes = $this->PopexBinace->cancelOrder($symbol, $binanceOrderDetail['binance_order_id']);
+
+            if ($binanceCancelRes !== false) {
+                log_message('debug', "Binance cancel Response : " .  json_encode($binanceCancelRes));
+
+                if ($binanceCancelRes['status'] == BINANCE_ORDER_STATUS_CANCELED) {
+                    log_message('debug', "Binance Order cancelled successfully.");
+                    $result = true;
+                } else {
+
+                    $isLinkedAgain = $this->CI->WsServer_model->linkPopexBinanceOrder($popexOrderId);
+                    // Here multiple things can be happen, 
+                    // 1. Order might already got filled
+                    // 2. Order might be already got cancelld.
+                    log_message('debug', "Binance Order could not cancelled.");
+                    log_message('debug', "Linked Back : ");
+                    log_message('debug',  $isLinkedAgain  ? 'YES' : 'NO');
+
+                    $result = false;
+                }
+            } else {
+                // Binance order not cancelled, in this case Order will be opened in binance but popex order will be taken to trade
+                $isLinkedAgain = $this->CI->WsServer_model->linkPopexBinanceOrder($popexOrderId);
+                log_message('debug', "Linked Back : ");
+                log_message('debug',  $isLinkedAgain  ? 'YES' : 'NO');
+                log_message('debug', "Binance Cancellation failed.");
+                $result = false;
+            }
+        } else {
+            // If cancellation not succeded don't use this order 
+            log_message('debug', 'Binance order unlink failed.');
+            $result = false;
+        }
+
+        log_message('debug', '-----------------------------------------------------');
+        log_message('debug', 'FINISHED : Binance Order Unlink and Cancellation');
+        log_message('debug', '-----------------------------------------------------');
+
+        return $result;
     }
 }
