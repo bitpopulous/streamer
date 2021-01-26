@@ -5,6 +5,7 @@ namespace PopulousWSS\Trade;
 use PopulousWSS\common\PopulousWSSConstants;
 use PopulousWSS\ServerHandler;
 use PopulousWSS\Common\Auth;
+use PopulousWSS\Exchanges\Binance;
 
 class Trade
 {
@@ -22,6 +23,8 @@ class Trade
     public $DM;
     public $DB;
 
+    protected $exchanges = [];
+
     public function __construct(ServerHandler $server)
     {
         $this->CI = &get_instance();
@@ -32,11 +35,13 @@ class Trade
         ]);
 
         $this->CI->load->library("PopDecimalMath", null, 'decimalmaths');
-        $this->CI->load->library('PopexBinance', NULL, 'PopexBinance');
+
 
         $this->DM = &$this->CI->decimalmaths;
         $this->DB = $this->CI->db;
-        $this->PopexBinace = &$this->CI->PopexBinance;
+        $this->exchanges['BINANCE'] = new Binance();
+        $this->exchanges['BINANCE']->loadExchangeInfo();
+
         $this->admin_id = getenv('ADMIN_USER_ID');
     }
 
@@ -504,7 +509,17 @@ class Trade
         log_message("debug", "BINANCE BUY $type TRADE");
         $binanceSupportedSymbol =  strtoupper(str_replace('_', '', $coinpair_details->symbol));
 
-        $bestAskBid = $this->CI->PopexBinance->get_best_bid_ask_price($binanceSupportedSymbol);
+        if (!$this->exchanges['BINANCE']->isSymbolSupported($binanceSupportedSymbol)) {
+            log_message("debug", "Binance Not supported symbol $binanceSupportedSymbol");
+            return;
+        }
+
+        $bestAskBid = $this->exchanges['BINANCE']->getBestBidAskPrice($binanceSupportedSymbol);
+
+        if (empty($bestAskBid)) {
+            log_message("debug", "Could not fetch binance best ask bid prices");
+            return;
+        }
 
         $binanceBuyerPrice = $bestAskBid['ask'];
 
@@ -531,8 +546,17 @@ class Trade
 
             // Link this order with binance order to make this updated on by binance trades update
 
+            $binanceSymbolInfo = $this->exchanges['BINANCE']->getSymbolInfo($binanceSupportedSymbol);
+
+            $baseAssetPrice = $this->_format_number($buytrade->bid_price, $binanceSymbolInfo['quotePrecision']);
+            $quoteAssetQty = $this->_format_number($buytrade->bid_qty_available, $binanceSymbolInfo['quotePrecision']);
+
             // Complete Order
-            $binanceOrderDetail = $this->CI->PopexBinance->do_buy_trade($binanceSupportedSymbol, $buytrade->bid_price, $buytrade->bid_qty_available, $type, $order_id);
+            if ($type == 'LIMIT') {
+                $binanceOrderDetail = $this->exchanges['BINANCE']->sendLimitOrder($binanceSupportedSymbol, 'BUY', $baseAssetPrice, $quoteAssetQty,  $order_id);
+            } else if ($type == 'MARKET') {
+                $binanceOrderDetail = $this->exchanges['BINANCE']->sendMarketOrder($binanceSupportedSymbol, 'BUY', $quoteAssetQty, $order_id);
+            }
 
             if ($binanceOrderDetail == null) {
                 log_message("debug", "No response from Binance");
@@ -575,6 +599,7 @@ class Trade
                 log_message('info', "Create Linked record");
                 $linked = $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
                 log_message('debug', $linked);
+                return true;
             } else if (
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_FILLED ||
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_PARTIALLY_FILLED
@@ -672,8 +697,17 @@ class Trade
         log_message("debug", "BINANCE SELL $type TRADE");
 
         $binanceSupportedSymbol =  strtoupper(str_replace('_', '', $coinpair_details->symbol));
+        if (!$this->exchanges['BINANCE']->isSymbolSupported($binanceSupportedSymbol)) {
+            log_message("debug", "Binance Not supported symbol $binanceSupportedSymbol");
+            return;
+        }
 
-        $bestAskBid = $this->CI->PopexBinance->get_best_bid_ask_price($binanceSupportedSymbol);
+        $bestAskBid = $this->exchanges['BINANCE']->getBestBidAskPrice($binanceSupportedSymbol);
+
+        if (empty($bestAskBid)) {
+            log_message("debug", "Could not fetch binance best ask bid prices");
+            return;
+        }
 
         $binanceBuyerPrice = $bestAskBid['bid'];
 
@@ -698,9 +732,24 @@ class Trade
             $primary_coin_id    = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_details->id);
             $secondary_coin_id  = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_details->id);
 
+
+            $binanceSymbolInfo = $this->exchanges['BINANCE']->getSymbolInfo($binanceSupportedSymbol);
+
+            if (!$this->exchanges['BINANCE']->isSymbolSupported($binanceSupportedSymbol)) {
+                log_message("debug", "Binance Not supported symbol $binanceSupportedSymbol");
+                return;
+            }
+
+            $baseAssetPrice = $this->_format_number($selltrade->bid_price, $binanceSymbolInfo['quotePrecision']);
+            $quoteAssetQty = $this->_format_number($selltrade->bid_qty_available, $binanceSymbolInfo['quotePrecision']);
+
             // Link this order with binance order to make this updated on by binance trades update
             // Complete Order
-            $binanceOrderDetail = $this->CI->PopexBinance->do_sell_trade($binanceSupportedSymbol, $selltrade->bid_price, $selltrade->bid_qty_available, $type, $order_id);
+            if ($type == 'LIMIT') {
+                $binanceOrderDetail = $this->exchanges['BINANCE']->sendLimitOrder($binanceSupportedSymbol, 'SELL', $baseAssetPrice, $quoteAssetQty, $order_id);
+            } else if ($type == 'MARKET') {
+                $binanceOrderDetail = $this->exchanges['BINANCE']->sendMarketOrder($binanceSupportedSymbol, 'SELL', $quoteAssetQty, $order_id);
+            }
 
             if ($binanceOrderDetail == null) {
                 log_message("debug", "No response from Binance");
@@ -874,7 +923,7 @@ class Trade
 
             log_message('debug', 'Linked order detail : ' . json_encode($popexBinanceOrderDetail));
 
-            $binanceOrderStatusDetail = $this->PopexBinace->get_order_status($symbol, $popexBinanceOrderDetail['binance_order_id']);
+            $binanceOrderStatusDetail = $this->exchanges['BINANCE']->getOrderStatus($symbol, $popexBinanceOrderDetail['binance_order_id']);
 
             log_message('debug', '------- BINANCE ORDER STATUS DETAILS -------');
 
@@ -889,12 +938,11 @@ class Trade
                 $binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_PARTIALLY_FILLED
             ) {
 
+                $binanceRes = $this->exchanges['BINANCE']->cancelOrder($symbol, $popexBinanceOrderDetail['binance_order_id']);
 
-                if ($orderdata->bid_type == 'SELL') {
-                    $binanceRes = $this->PopexBinace->cancel_sell_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
-                } else if ($orderdata->bid_type == 'BUY') {
-                    $binanceRes = $this->PopexBinace->cancel_buy_order($symbol, $popexBinanceOrderDetail['binance_order_id']);
-                }
+                // if ($orderdata->bid_type == 'SELL') {
+                // } else if ($orderdata->bid_type == 'BUY') {
+                // }
 
                 if ($binanceRes == false) {
                     log_message('debug', 'Binance Respond false');
@@ -1214,7 +1262,7 @@ class Trade
 
         if ($isUnlinked && $binanceOrderDetailAfter['status'] == PopulousWSSConstants::EXTERNAL_ORDER_INACTIVE_STATUS) {
             // Send cancellation order to binance
-            $binanceCancelRes = $this->PopexBinace->cancelOrder($symbol, $binanceOrderDetail['binance_order_id']);
+            $binanceCancelRes = $this->exchanges['BINANCE']->cancelOrder($symbol, $binanceOrderDetail['binance_order_id']);
 
             if ($binanceCancelRes !== false) {
                 log_message('debug', "Binance cancel Response : " .  json_encode($binanceCancelRes));

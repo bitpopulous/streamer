@@ -61,6 +61,10 @@ class PrivateEvent extends PrivateChannel
             $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($coin_id);
             $symbol = strtoupper(str_replace('_', '', $symbol));
             $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBook($symbol);
+
+            if ($binanceOrderbook == null) {
+                $binanceOrderbook = ['bids' => [], 'asks' => []];
+            }
             // $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBookRes();
 
             $orderBook = $this->CI->WsServer_model->merge_orderbook($orderBook['buy_orders'], $orderBook['sell_orders'],  $binanceOrderbook['bids'], $binanceOrderbook['asks']);

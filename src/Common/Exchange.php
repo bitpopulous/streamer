@@ -9,11 +9,13 @@ namespace PopulousWSS\Common;
 abstract class Exchange
 {
 	private $name = '';
-	private $limitOrderResponse = [];
-	private $marketOrderResponse = [];
-	private $cancelOrderResponse = [];
-	private $orderStatusResponse = [];
-	private $orderBookResponse = [];
+	public $limitOrderResponse = [];
+	public $marketOrderResponse = [];
+	public $cancelOrderResponse = [];
+	public $orderStatusResponse = [];
+	public $orderBookResponse = [];
+	public $exchangeInfoResponse = [];
+	public $bestBidAskPriceResponse = [];
 
 	public function __construct(string $apiKey, string $apiSecret, $name = '')
 	{
@@ -23,10 +25,14 @@ abstract class Exchange
 	}
 
 	abstract public  function getOrderBook(string $symbol, int $limit = 40);
-	abstract public  function sendLimitOrder(string $symbol, string $price, string $qty);
-	abstract public  function sendMarketOrder(string $symbol, string $qty);
-	abstract public  function getOrderStatus(string $orderId);
-	abstract public  function cancelOrder(string $orderId);
+	abstract public  function sendLimitOrder(string $symbol, string $side, string $price, string $qty, string $clientId = '');
+	abstract public  function sendMarketOrder(string $symbol, string $side, string $qty, string $clientId = '');
+	abstract public  function getOrderStatus(string $symbol, string $orderId);
+	abstract public  function cancelOrder(string $symbol, string $orderId);
+	abstract public  function loadExchangeInfo();
+	abstract public  function isSymbolSupported(string $symbol);
+	abstract public  function getSymbolInfo(string $symbol);
+	abstract public  function getBestBidAskPrice(string $symbol);
 
 	private function setApiKey(string $_key)
 	{
@@ -70,5 +76,10 @@ abstract class Exchange
 	public function getOrderBookRes()
 	{
 		return $this->orderBookResponse;
+	}
+
+	public function exchangeInfoRes()
+	{
+		return $this->exchangeInfoResponse;
 	}
 }

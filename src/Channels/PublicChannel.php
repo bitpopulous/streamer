@@ -13,6 +13,7 @@ class PublicChannel
     public $channels;
     protected $CI;
     public $wss_server;
+    public $exchanges = [];
 
     public function __construct(ServerHandler $server)
     {
@@ -28,7 +29,9 @@ class PublicChannel
         $this->CI->load->library("PopDecimalMath", null, 'decimalmaths');
         $this->DM = $this->CI->decimalmaths;
 
-        $this->exchanges = [];
+        /**
+         * External exchange plugins
+         */
         $this->exchanges['BINANCE'] = new Binance();
     }
 
