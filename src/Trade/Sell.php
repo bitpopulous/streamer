@@ -14,8 +14,6 @@ class Sell extends Trade
     {
         parent::__construct($server);
         $this->wss_server = $server;
-
-        $this->CI->load->library('PopexBinance', NULL, 'PopexBinance');
     }
 
     private function _do_sell_trade($selltrade, $buytrade)
