@@ -394,12 +394,22 @@ class Trade
 
         $orderdata = $this->CI->WsServer_model->get_order($order_id);
 
-        if ($user_id != $orderdata->user_id) {
-
-            log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
-
+        if ($orderdata == null) {
+            log_message('debug', 'Order not found.');
             $data['isSuccess'] = false;
-            $data['message'] = 'You are not allow to cancel this order.';
+            $data['message'] = 'Order not found.';
+        } else if ($orderdata->status == PopulousWSSConstants::BID_CANCELLED_STATUS) {
+            log_message('debug', 'Order is already cancelled.');
+            $data['isSuccess'] = false;
+            $data['message'] = 'Order is already cancelled';
+        } else if ($user_id != $orderdata->user_id) {
+            log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
+            $data['isSuccess'] = false;
+            $data['message'] = 'You are not allowed to cancel this order.';
+        } else if ($orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
+            log_message('debug', 'Order is not pending.');
+            $data['isSuccess'] = false;
+            $data['message'] = 'Order is not pending';
         } else {
 
             $canceltrade = array(
@@ -900,12 +910,22 @@ class Trade
 
         $orderdata = $this->CI->WsServer_model->get_order($order_id);
 
-        if ($user_id != $orderdata->user_id) {
-
-            log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
-
+        if ($orderdata == null) {
+            log_message('debug', 'Order not found.');
             $data['isSuccess'] = false;
-            $data['message'] = 'You are not allow to cancel this order.';
+            $data['message'] = 'Order not found.';
+        } else if ($orderdata->status == PopulousWSSConstants::BID_CANCELLED_STATUS) {
+            log_message('debug', 'Order is already cancelled.');
+            $data['isSuccess'] = false;
+            $data['message'] = 'Order is already cancelled';
+        } else if ($user_id != $orderdata->user_id) {
+            log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
+            $data['isSuccess'] = false;
+            $data['message'] = 'You are not allowed to cancel this order.';
+        } else if ($orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
+            log_message('debug', 'Order is not pending.');
+            $data['isSuccess'] = false;
+            $data['message'] = 'Order is not pending';
         } else {
 
             $symbol = $this->CI->WsServer_model->get_coinpair_symbol_of_coinpairId($orderdata->coinpair_id);
