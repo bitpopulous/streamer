@@ -157,32 +157,48 @@ class Trade
         return FALSE;
     }
 
+
+    /**
+     * 0 = No decimal, Max value would be 99999999
+     * 1 = 99999999.9
+     * 2 = 99999999.99
+     * 3 = 99999999.999
+     */
     public function max_value($decimals)
     {
 
-        $_str = '';
+        $_str = '99999999'; // Maximum 99999999 <- 8 decigit before precision
 
-        for ($i = 1; $i <= 8; $i++) {
-            $_str .= '9';
-        }
-        $_str .= '.';
-        for ($j = 1; $j <= (int) $decimals; $j++) {
-            $_str .= '9';
+        if ($decimals > 0) {
+            $_str .= '.';
+            for ($j = 1; $j <= (int) $decimals; $j++) {
+                $_str .= '9';
+            }
         }
 
         return $_str;
     }
 
+    /**
+     * 0 = No decimal, Min value would be 1
+     * 1 = 0.1
+     * 2 = 0.001
+     * 3 = 0.0001
+     */
     public function min_value($decimals)
     {
 
-        $_str = '0.';
 
-        for ($i = 1; $i < $decimals; $i++) {
-            $_str .= '0';
+        $_str = '';
+        if ($decimals > 0) {
+            $_str = '0.';
+            for ($i = 1; $i < $decimals; $i++) {
+                $_str .= '0';
+            }
+            $_str .= '1';
+        } else {
+            $_str = '1';
         }
-
-        $_str .= '1';
 
         return $_str;
     }
