@@ -66,9 +66,11 @@ class ServerBaseHandler extends WebSocket
         } else {
             $this->log->debug($msg);
             if ($msg == 'ping') {
-                if (is_resource($recv->getUniqueSocketId())) {
-                    $recv->send("pong");
-                }
+                // $this->log->debug("I got Ping...");
+                // if (is_resource($recv->getUniqueSocketId())) {
+                //     // $this->log->debug("Sending Pong...");
+                // }
+                $recv->send("pong");
             }
         }
     }
