@@ -69,7 +69,8 @@ class PublicChannel
             $subscribers = $this->channels[$channel];
             $clients = $this->wss_server->_get_clients();
             foreach ($subscribers as $s) {
-                if (isset($clients[$s])) {
+                if (isset($clients[$s]) && is_resource($clients[$s])) {
+                    // Check subscriber connection is still alive before sending
                     $clients[$s]->send($message);
                 }
             }
