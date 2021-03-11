@@ -165,7 +165,7 @@ class ExternalEvent extends ExternalChannel
     public function _event_global_price_update($coinPairSymbol,  array $newPriceData)
     {
 
-        $this->CI->WsServer_model->create_or_update_global_price($newPriceData['symbol'], $newPriceData['price'], $newPriceData['last_updated_ts']);
+        $this->CI->WsServer_model->create_or_update_global_price($newPriceData['symbol'], $newPriceData['price'], hexdec($newPriceData['last_updated_ts']['_hex']));
         $coinPriceDetail = $this->CI->WsServer_model->get_global_price_by_symbol($newPriceData['symbol']);
 
         $channels = [];
