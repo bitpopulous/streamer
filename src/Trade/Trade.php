@@ -635,18 +635,11 @@ class Trade
                 // clientOrderId
                 $this->CI->WsServer_model->createPopexBinanceOrderLink($buytrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
 
+
+                /**
+                 * For Market type : Price will be 0.0000 , Use fills records which will have every trade detail
+                 */
                 $completeQty = $binanceOrderDetail['executedQty'];
-                $price = $binanceOrderDetail['price'];
-                $totalAmount = $this->DM->safe_multiplication([$completeQty, $price]);
-
-                $availableQty = $this->DM->safe_minus([$buytrade->bid_qty_available, $completeQty]);
-                $availableAmount = $this->DM->safe_multiplication([$availableQty,  $price]);
-
-                // BUYER WILL GET PRIMARY COIN
-                // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
-                // AND PRIMARY COIN WILL BE CREDITED
-                $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $completeQty);
-
                 $tradeNewStatus = '';
 
                 if ($binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_FILLED) {
@@ -655,62 +648,152 @@ class Trade
                     $tradeNewStatus = PopulousWSSConstants::BID_PENDING_STATUS;
                 }
 
-                // Update buy trade with completed status
-                $buyupdate = array(
-                    'bid_qty_available' => $availableQty,
-                    'amount_available' => $availableAmount,
-                    'status' =>   $tradeNewStatus
-                );
-                log_message("debug", 'Buy Trade update ');
-                log_message("debug", json_encode($buyupdate));
+                if ($type == 'LIMIT') {
+                    // Limit trade
+                    $price = $binanceOrderDetail['price'];
+                    $totalAmount = $this->DM->safe_multiplication([$completeQty, $price]);
 
-                $buytraderlog = array(
-                    'bid_id' => $buytrade->id,
-                    'bid_type' => $buytrade->bid_type,
-                    'complete_qty' => $completeQty,
-                    'bid_price' => $price,
-                    'complete_amount' => $totalAmount,
-                    'user_id' => $buytrade->user_id,
-                    'coinpair_id' => $buytrade->coinpair_id,
-                    'success_time' => $success_datetime,
-                    'fees_amount' => "0", // We don't charge any fees if traded on binance 
-                    'available_amount' => $availableAmount,
-                    'status' =>  $tradeNewStatus,
-                );
-                log_message("debug", 'Buy Trade log');
-                log_message("debug", json_encode($buytraderlog));
+                    $availableQty = $this->DM->safe_minus([$buytrade->bid_qty_available, $completeQty]);
 
-                $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
-                $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
+                    $availableAmount = $this->DM->safe_multiplication([$availableQty,  $price]);
 
 
+                    // BUYER WILL GET PRIMARY COIN
+                    // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
+                    // AND PRIMARY COIN WILL BE CREDITED
+                    $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $completeQty);
 
-                try {
-                    // Update SL orders and OHLCV
-                    $this->after_successful_trade($buytrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
-                    // EVENT for BUY party
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                        [
-                            'order_id' => $buytrade->id,
+
+                    // Update buy trade with completed status
+                    $buyupdate = array(
+                        'bid_qty_available' => $availableQty,
+                        'amount_available' => $availableAmount,
+                        'status' =>   $tradeNewStatus
+                    );
+                    log_message("debug", 'Buy Trade update ');
+                    log_message("debug", json_encode($buyupdate));
+
+                    $buytraderlog = array(
+                        'bid_id' => $buytrade->id,
+                        'bid_type' => $buytrade->bid_type,
+                        'complete_qty' => $completeQty,
+                        'bid_price' => $price,
+                        'complete_amount' => $totalAmount,
+                        'user_id' => $buytrade->user_id,
+                        'coinpair_id' => $buytrade->coinpair_id,
+                        'success_time' => $success_datetime,
+                        'fees_amount' => "0", // We don't charge any fees if traded on binance 
+                        'available_amount' => $availableAmount,
+                        'status' =>  $tradeNewStatus,
+                    );
+                    log_message("debug", 'Buy Trade log');
+                    log_message("debug", json_encode($buytraderlog));
+
+                    $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
+                    $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
+
+
+
+                    try {
+                        // Update SL orders and OHLCV
+                        $this->after_successful_trade($buytrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
+                        // EVENT for BUY party
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                            [
+                                'order_id' => $buytrade->id,
+                                'user_id' => $buytrade->user_id,
+                            ]
+                        );
+
+                        // EVENT for single trade
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_TRADE_CREATED,
+                            [
+                                'log_id' => $log_id,
+                            ]
+                        );
+
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                            []
+                        );
+                    } catch (\Exception $e) {
+                    }
+                } else if ($type == 'MARKET') {
+                    // Market trade
+
+                    $fills = (array) $binanceOrderDetail['fills'];
+
+                    $availableQtyBefore = $buytrade->bid_qty_available;
+
+                    foreach ($fills as $_fill) {
+
+                        $_fill = (array) $_fill;
+                        $_price = $_fill['price'];
+                        $_qty = $_fill['qty'];
+
+                        $totalAmount = $this->DM->safe_multiplication([$_qty, $_price]);
+
+                        $availableQty = $this->DM->safe_minus([$availableQtyBefore, $_qty]);
+                        $availableAmount = $this->DM->safe_multiplication([$availableQty,  $_price]);
+
+                        $availableQtyBefore = $availableQty; // Keep track of reduced qty 
+
+                        // BUYER WILL GET PRIMARY COIN
+                        // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
+                        // AND PRIMARY COIN WILL BE CREDITED
+                        $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $_qty);
+
+                        $buytraderlog = array(
+                            'bid_id' => $buytrade->id,
+                            'bid_type' => $buytrade->bid_type,
+                            'complete_qty' => $_qty,
+                            'bid_price' => $_price,
+                            'complete_amount' => $totalAmount,
                             'user_id' => $buytrade->user_id,
-                        ]
-                    );
+                            'coinpair_id' => $buytrade->coinpair_id,
+                            'success_time' => $success_datetime,
+                            'fees_amount' => "0", // We don't charge any fees if traded on binance 
+                            'available_amount' => $availableAmount,
+                            'status' =>  $tradeNewStatus,
+                        );
+                        log_message("debug", 'Buy Trade log');
+                        log_message("debug", json_encode($buytraderlog));
 
-                    // EVENT for single trade
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_TRADE_CREATED,
-                        [
-                            'log_id' => $log_id,
-                        ]
-                    );
+                        $this->CI->WsServer_model->update_order($buytrade->id, $buyupdate);
+                        $log_id = $this->CI->WsServer_model->insert_order_log($buytraderlog);
 
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                        []
-                    );
-                } catch (\Exception $e) {
+
+                        try {
+                            // Update SL orders and OHLCV
+                            $this->after_successful_trade($buytrade->coinpair_id,  $_price, $_qty, $success_datetimestamp);
+                            // EVENT for BUY party
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                                [
+                                    'order_id' => $buytrade->id,
+                                    'user_id' => $buytrade->user_id,
+                                ]
+                            );
+
+                            // EVENT for single trade
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_TRADE_CREATED,
+                                [
+                                    'log_id' => $log_id,
+                                ]
+                            );
+
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                                []
+                            );
+                        } catch (\Exception $e) {
+                        }
+                    }
                 }
+
 
                 return true;
             }
@@ -826,17 +909,6 @@ class Trade
                 $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
 
                 $completeQty = $binanceOrderDetail['executedQty'];
-                $price = $binanceOrderDetail['price'];
-                $totalAmount = $this->DM->safe_multiplication([$completeQty, $price]);
-
-                $availableQty = $this->DM->safe_minus([$selltrade->bid_qty_available, $completeQty]);
-                $availableAmount = $this->DM->safe_multiplication([$availableQty,  $price]);
-
-                // BUYER WILL GET PRIMARY COIN
-                // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
-                // AND PRIMARY COIN WILL BE CREDITED
-
-                $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $completeQty, $totalAmount);
 
                 $tradeNewStatus = '';
 
@@ -846,60 +918,162 @@ class Trade
                     $tradeNewStatus = PopulousWSSConstants::BID_PENDING_STATUS;
                 }
 
-                // Update buy trade with completed status
-                $sellupdate = array(
-                    'bid_qty_available' => $availableQty,
-                    'amount_available' => $availableAmount,
-                    'status' =>   $tradeNewStatus
-                );
-                log_message("debug", 'Sell Trade update ');
-                log_message("debug", json_encode($sellupdate));
 
-                $selltraderlog = array(
-                    'bid_id' => $selltrade->id,
-                    'bid_type' => $selltrade->bid_type,
-                    'complete_qty' => $completeQty,
-                    'bid_price' => $price,
-                    'complete_amount' => $totalAmount,
-                    'user_id' => $selltrade->user_id,
-                    'coinpair_id' => $selltrade->coinpair_id,
-                    'success_time' => $success_datetime,
-                    'fees_amount' => "0", // We don't charge any fees if traded on binance 
-                    'available_amount' => $availableAmount,
-                    'status' =>  $tradeNewStatus,
-                );
-                log_message("debug", 'Sell Trade log');
-                log_message("debug", json_encode($selltraderlog));
+                if ($type == 'LIMIT') {
+                    // Limit trade
 
-                $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
-                $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
+                    $price = $binanceOrderDetail['price'];
+                    $totalAmount = $this->DM->safe_multiplication([$completeQty, $price]);
+
+                    $availableQty = $this->DM->safe_minus([$selltrade->bid_qty_available, $completeQty]);
+                    $availableAmount = $this->DM->safe_multiplication([$availableQty,  $price]);
+
+                    // BUYER WILL GET PRIMARY COIN
+                    // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
+                    // AND PRIMARY COIN WILL BE CREDITED
+
+                    $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $completeQty, $totalAmount);
+
+                    // Update buy trade with completed status
+                    $sellupdate = array(
+                        'bid_qty_available' => $availableQty,
+                        'amount_available' => $availableAmount,
+                        'status' =>   $tradeNewStatus
+                    );
+                    log_message("debug", 'Sell Trade update ');
+                    log_message("debug", json_encode($sellupdate));
+
+                    $selltraderlog = array(
+                        'bid_id' => $selltrade->id,
+                        'bid_type' => $selltrade->bid_type,
+                        'complete_qty' => $completeQty,
+                        'bid_price' => $price,
+                        'complete_amount' => $totalAmount,
+                        'user_id' => $selltrade->user_id,
+                        'coinpair_id' => $selltrade->coinpair_id,
+                        'success_time' => $success_datetime,
+                        'fees_amount' => "0", // We don't charge any fees if traded on binance 
+                        'available_amount' => $availableAmount,
+                        'status' =>  $tradeNewStatus,
+                    );
+                    log_message("debug", 'Sell Trade log');
+                    log_message("debug", json_encode($selltraderlog));
+
+                    $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
+                    $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
 
 
-                try {
-                    // Update SL orders and OHLCV
-                    $this->after_successful_trade($selltrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
-                    // EVENT for BUY party
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                        [
-                            'order_id' => $selltrade->id,
+                    try {
+                        // Update SL orders and OHLCV
+                        $this->after_successful_trade($selltrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
+                        // EVENT for BUY party
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                            [
+                                'order_id' => $selltrade->id,
+                                'user_id' => $selltrade->user_id,
+                            ]
+                        );
+
+                        // EVENT for single trade
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_TRADE_CREATED,
+                            [
+                                'log_id' => $log_id,
+                            ]
+                        );
+
+                        $this->wss_server->_event_push(
+                            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                            []
+                        );
+                    } catch (\Exception $e) {
+                    }
+                } else if ($type == 'MARKET') {
+                    // Market trade
+
+                    $fills = (array) $binanceOrderDetail['fills'];
+                    $availableQtyBefore = $selltrade->bid_qty_available;
+
+                    foreach ($fills as $_fill) {
+
+                        $_fill = (array) $_fill;
+                        $_price = $_fill['price'];
+                        $_qty = $_fill['qty'];
+
+                        $totalAmount = $this->DM->safe_multiplication([$_qty, $_price]);
+
+                        $availableQty = $this->DM->safe_minus([$availableQtyBefore, $_qty]);
+                        $availableAmount = $this->DM->safe_multiplication([$availableQty,  $_price]);
+
+
+                        $availableQtyBefore = $availableQty; // Keep track of reduced qty 
+
+
+
+                        // BUYER WILL GET PRIMARY COIN
+                        // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
+                        // AND PRIMARY COIN WILL BE CREDITED
+
+                        $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $_qty, $totalAmount);
+
+                        // Update buy trade with completed status
+                        $sellupdate = array(
+                            'bid_qty_available' => $availableQty,
+                            'amount_available' => $availableAmount,
+                            'status' =>   $tradeNewStatus
+                        );
+                        log_message("debug", 'Sell Trade update ');
+                        log_message("debug", json_encode($sellupdate));
+
+
+                        $selltraderlog = array(
+                            'bid_id' => $selltrade->id,
+                            'bid_type' => $selltrade->bid_type,
+                            'complete_qty' => $_qty,
+                            'bid_price' => $_price,
+                            'complete_amount' => $totalAmount,
                             'user_id' => $selltrade->user_id,
-                        ]
-                    );
+                            'coinpair_id' => $selltrade->coinpair_id,
+                            'success_time' => $success_datetime,
+                            'fees_amount' => "0", // We don't charge any fees if traded on binance 
+                            'available_amount' => $availableAmount,
+                            'status' =>  $tradeNewStatus,
+                        );
+                        log_message("debug", 'Sell Trade log');
+                        log_message("debug", json_encode($selltraderlog));
 
-                    // EVENT for single trade
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_TRADE_CREATED,
-                        [
-                            'log_id' => $log_id,
-                        ]
-                    );
+                        $this->CI->WsServer_model->update_order($selltrade->id, $sellupdate);
+                        $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
 
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                        []
-                    );
-                } catch (\Exception $e) {
+
+                        try {
+                            // Update SL orders and OHLCV
+                            $this->after_successful_trade($selltrade->coinpair_id,  $_price, $_qty, $success_datetimestamp);
+                            // EVENT for BUY party
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                                [
+                                    'order_id' => $selltrade->id,
+                                    'user_id' => $selltrade->user_id,
+                                ]
+                            );
+
+                            // EVENT for single trade
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_TRADE_CREATED,
+                                [
+                                    'log_id' => $log_id,
+                                ]
+                            );
+
+                            $this->wss_server->_event_push(
+                                PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+                                []
+                            );
+                        } catch (\Exception $e) {
+                        }
+                    }
                 }
 
                 return true;
