@@ -52,8 +52,11 @@ class ExternalEvent extends ExternalChannel
         //"data":{"buy_orders":[{"bid_type":"BUY","bid_price":"2.0000","all_users":"5JOI9S","total_qty":"2.00000000","total_price":"4.0000"},{"bid_type":"BUY","bid_price":"1.0000","all_users":"5JOI9S","total_qty":"10.00000000","total_price":"10.0000"}],"sell_orders":[]}}
 
         $channels = [];
-        $channels[$marketGlobalChannel] = [];
-        $channels[$marketGlobalChannel][] = $event;
+
+        if ($marketGlobalChannel != null) {
+            $channels[$marketGlobalChannel] = [];
+            $channels[$marketGlobalChannel][] = $event;
+        }
 
         return $channels;
     }
@@ -174,8 +177,11 @@ class ExternalEvent extends ExternalChannel
 
         $cryptoRatesChannel = $this->CI->WsServer_model->get_crypto_rate_channel();
 
-        $channels[$cryptoRatesChannel] = [];
-        $channels[$cryptoRatesChannel][] = $this->_prepare_crypto_prices();
+        if ($cryptoRatesChannel != null) {
+            $channels[$cryptoRatesChannel] = [];
+            $channels[$cryptoRatesChannel][] = $this->_prepare_crypto_prices();
+        }
+
 
         return $channels;
 
