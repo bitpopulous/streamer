@@ -840,9 +840,14 @@ class Buy extends Trade
                 );
 
                 $data['isSuccess'] = true;
-                $data['message'] = $this->_format_number($boughtAmount, $coin_details->primary_decimals) . ' Bought. ' .
-                    $this->_format_number($remaining_qty, $coin_details->primary_decimals) . '  created open order at price ' .
-                    $this->_format_number($last_trade_price, $coin_details->secondary_decimals);
+
+                $buytrade = $this->CI->WsServer_model->get_order($last_id);
+
+                $boughtQty = $this->DM->safe_minus([$buytrade->bid_qty, $buytrade->bid_qty_available]);
+                $boughtQty = $this->_format_number($boughtQty, $coin_details->primary_decimals);
+                $remaining_qty = $buytrade->bid_qty_available;
+
+                $data['message'] = "Qty $boughtQty Sold out. Remaining $remaining_qty";
                 return $data;
             } else {
                 $data['isSuccess'] = false;

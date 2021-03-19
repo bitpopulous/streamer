@@ -838,11 +838,17 @@ class Sell extends Trade
                 );
 
                 // $soldAmount = $this->_safe_math(" $qty - $remaining_qty ");
-                $soldAmount = $this->DM->safe_minus([$qty, $remaining_qty]);
+                // $soldAmount = $this->DM->safe_minus([$qty, $remaining_qty]);
 
+                // Update trade detail
+                $selltrade = $this->CI->WsServer_model->get_order($last_id);
+
+                $soldOutQty = $this->DM->safe_minus([$selltrade->bid_qty, $selltrade->bid_qty_available]);
+                $soldOutQty = $this->_format_number($soldOutQty, $coin_details->primary_decimals);
+                $remaining_qty = $selltrade->bid_qty_available;
 
                 $data['isSuccess'] = true;
-                $data['message'] = $soldAmount . ' Sold. ' . $remaining_qty . '  created open order at price ' . $last_price;
+                $data['message'] = "Qty $soldOutQty Sold out. Remaining $remaining_qty";
                 return $data;
             } else {
                 $data['isSuccess'] = false;

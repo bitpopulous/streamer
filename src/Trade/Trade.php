@@ -745,6 +745,15 @@ class Trade
                         // AND PRIMARY COIN WILL BE CREDITED
                         $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $_qty);
 
+                        // Update buy trade with completed status
+                        $buyupdate = array(
+                            'bid_qty_available' => $availableQty,
+                            'amount_available' => $availableAmount,
+                            'status' =>   $tradeNewStatus
+                        );
+                        log_message("debug", 'Buy Trade update ');
+                        log_message("debug", json_encode($buyupdate));
+
                         $buytraderlog = array(
                             'bid_id' => $buytrade->id,
                             'bid_type' => $buytrade->bid_type,
