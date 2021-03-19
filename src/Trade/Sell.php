@@ -783,6 +783,7 @@ class Sell extends Trade
 
                     $binanceExecuted = $this->binance_sell_trade($coin_details, $selltrade, 'MARKET', $selltrade->id);
                     if ($binanceExecuted === true) {
+
                         log_message('debug', 'Trade executed :)');
                     } else {
                         log_message('debug', 'Could not execute');
@@ -845,7 +846,7 @@ class Sell extends Trade
 
                 $soldOutQty = $this->DM->safe_minus([$selltrade->bid_qty, $selltrade->bid_qty_available]);
                 $soldOutQty = $this->_format_number($soldOutQty, $coin_details->primary_decimals);
-                $remaining_qty = $selltrade->bid_qty_available;
+                $remaining_qty = $this->_format_number($selltrade->bid_qty_available, $coin_details->primary_decimals);
 
                 $data['isSuccess'] = true;
                 $data['message'] = "Qty $soldOutQty Sold out. Remaining $remaining_qty";

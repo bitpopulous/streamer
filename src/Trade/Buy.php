@@ -845,7 +845,7 @@ class Buy extends Trade
 
                 $boughtQty = $this->DM->safe_minus([$buytrade->bid_qty, $buytrade->bid_qty_available]);
                 $boughtQty = $this->_format_number($boughtQty, $coin_details->primary_decimals);
-                $remaining_qty = $buytrade->bid_qty_available;
+                $remaining_qty = $this->_format_number($buytrade->bid_qty_available, $coin_details->primary_decimals);
 
                 $data['message'] = "Qty $boughtQty Sold out. Remaining $remaining_qty";
                 return $data;

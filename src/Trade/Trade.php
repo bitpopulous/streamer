@@ -661,7 +661,7 @@ class Trade
                     // BUYER WILL GET PRIMARY COIN
                     // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
                     // AND PRIMARY COIN WILL BE CREDITED
-                    $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $completeQty);
+                    $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $completeQty, $totalAmount);
 
 
                     // Update buy trade with completed status
@@ -743,7 +743,7 @@ class Trade
                         // BUYER WILL GET PRIMARY COIN
                         // THE SECONDARY AMOUNT BUYER HAS HOLD WE WILL BE DEDUCTED
                         // AND PRIMARY COIN WILL BE CREDITED
-                        $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $totalAmount, $_qty);
+                        $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $_qty, $totalAmount);
 
                         // Update buy trade with completed status
                         $buyupdate = array(
