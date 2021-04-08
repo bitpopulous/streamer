@@ -18,7 +18,10 @@ class ExternalEvent extends ExternalChannel
     {
 
         // Get current popex orderbook
-        $orderBook = $this->CI->WsServer_model->get_orders($coinpairId, 40, 'array');
+        // Disabled POPEX ORDERBOOK MERGING
+        // $orderBook = $this->CI->WsServer_model->get_orders($coinpairId, 40, 'array'); 
+
+        $orderBook = ['buy_orders' => [], 'sell_orders' => []];
 
         if (isset($this->exchanges['BINANCE'])) {
             $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($coinpairId);
