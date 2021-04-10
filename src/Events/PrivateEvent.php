@@ -56,8 +56,13 @@ class PrivateEvent extends PrivateChannel
 
     private function get_order_book($coin_id)
     {
-        $orderBook = $this->CI->WsServer_model->get_orders($coin_id, 50, 'array');
-        if (isset($this->exchanges['BINANCE'])) {
+
+        $exchangeType = $this->CI->WsServer_model->get_exchange_type_by_coinpair_id($coin_id);
+
+        if ($exchangeType == 'POPEX') {
+            $orderBook = $this->CI->WsServer_model->get_orders($coin_id, 50, 'array');
+        } else if ($exchangeType == 'BINANCE' && isset($this->exchanges['BINANCE'])) {
+
             $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($coin_id);
             $symbol = strtoupper(str_replace('_', '', $symbol));
             $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBook($symbol);
@@ -65,11 +70,9 @@ class PrivateEvent extends PrivateChannel
             if ($binanceOrderbook == null) {
                 $binanceOrderbook = ['bids' => [], 'asks' => []];
             }
-            // $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBookRes();
 
-            $orderBook = $this->CI->WsServer_model->merge_orderbook($orderBook['buy_orders'], $orderBook['sell_orders'],  $binanceOrderbook['bids'], $binanceOrderbook['asks']);
+            $orderBook = $this->CI->WsServer_model->merge_orderbook([], [],  $binanceOrderbook['bids'], $binanceOrderbook['asks']);
         }
-
         return $orderBook;
     }
     public function _prepare_exchange_init_data($coin_id, $auth): array

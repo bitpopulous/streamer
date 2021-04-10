@@ -27,67 +27,23 @@ class Sell extends Trade
             log_message('debug', '--------DO SELL START--------');
 
 
-            log_message('debug', '----------- EXTERNAL EXCHANGE PRE-CHECKING STARTS -----------');
-
-            $isBinanceBuyOrder  = $this->CI->WsServer_model->isBinanceOrderAndActiveStatus($buytrade->id);
-            $isBinanceSellOrder = $this->CI->WsServer_model->isBinanceOrderAndActiveStatus($selltrade->id);
-
             $coinpair_id = intval($selltrade->coinpair_id);
             $symbol = $this->CI->WsServer_model->get_coinpair_symbol_of_coinpairId($coinpair_id);
             $symbol =  str_replace('_', '', strtoupper($symbol));
 
             log_message("debug", "Coin pair : " . $symbol);
 
-            if ($isBinanceBuyOrder) {
-                log_message('debug', 'It is a BINANCE BUY order');
-                // GET  sent Liquidity back to Popex from BINANCE
-                // CANCEL THE ORDER ON BINANCE
-                // If Binance order is already filled, do not use this order. (This is rare case but can be happen)
-                // Cancel order on binance 
-                // : Keep in mind if you cancel order on binance, external event will come to credit back amount, which MUST not be happen here
-                // : To prevent credit back on cancellation here, Unlink this order as a binance order from popex_binance_orders before you send cancellation to binance
-
-                $isUnlinkedAndCancelled = $this->_binance_order_unlink_and_cancel($buytrade->id, $symbol);
-
-                if ($isUnlinkedAndCancelled == false) {
-                    log_message('debug', "Can not use this buy trade as internal popex trading.");
-                    return;
-                } else {
-                    log_message('debug', "Buy order Unlinked");
-                }
-            } else {
-                log_message('debug', 'It is a POPEX BUY order');
-            }
-
-            if ($isBinanceSellOrder) {
-                log_message('debug', 'It is a BINANCE SELL order');
-
-                $isUnlinkedAndCancelled = $this->_binance_order_unlink_and_cancel($selltrade->id, $symbol);
-
-                if ($isUnlinkedAndCancelled == false) {
-                    log_message('debug', "Can not use this sell trade as internal popex trading.");
-                    return;
-                } else {
-                    log_message('debug', "Sell order Unlinked");
-                }
-            } else {
-                log_message('debug', 'It is a POPEX SELL order');
-            }
-
-            log_message('debug', '----------- EXTERNAL EXCHANGE PRE-CHECKING ENDS -----------');
-
             $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
             $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
 
-            $ps_decimals = $this->CI->WsServer_model->_get_decimals_of_coin($coinpair_id);
+            if ($selltrade->is_market) {
+                $trade_price = $buytrade->bid_price;
+            } else {
+                $trade_price    = $this->DM->biggest($selltrade->bid_price, $buytrade->bid_price);
+            }
 
-            if ($ps_decimals['fetch'] == false) return FALSE;
-
-            $primary_coin_decimal   = $ps_decimals['primary_decimals'];
-            $secondary_coin_decimal = $ps_decimals['secondary_decimals'];
 
             $trade_qty      = $this->DM->smallest($selltrade->bid_qty_available, $buytrade->bid_qty_available);
-            $trade_price    = $this->DM->biggest($selltrade->bid_price, $buytrade->bid_price);
             $trade_amount   = $this->DM->safe_multiplication([$trade_qty, $trade_price]);
 
             log_message('debug', 'Trade Qty : ' . $trade_qty);
@@ -106,8 +62,8 @@ class Sell extends Trade
             $buyer_receiving_amount = $trade_qty;
             $seller_will_pay        = $trade_qty;
 
-            $seller_receiving_amount = $trade_amount; //$this->_safe_math(" $trade_qty * $trade_price ");
-            $buyer_will_pay          = $trade_amount; //$this->_safe_math(" $trade_qty * $trade_price ");
+            $seller_receiving_amount = $trade_amount;
+            $buyer_will_pay          = $trade_amount;
 
 
             /**
@@ -223,12 +179,24 @@ class Sell extends Trade
             log_message('debug', 'End : Admin Fees Credit ');
             log_message("debug", "---------------------------------------------");
 
+
             $this->_buyer_trade_balance_update($buytrade->user_id, $primary_coin_id, $secondary_coin_id, $buyer_receiving_amount_after_fees, $buyer_will_pay);
-            $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount_after_fees);
+
+
+            if ($selltrade->is_market) {
+                // NO HOLD USE : TRUE, Direct deduction & credit
+                // BUYER WILL PAY SECONDARY COIN AMOUNT
+                $this->CI->WsServer_model->get_debit_balance_new($selltrade->user_id, $primary_coin_id, $seller_will_pay);
+
+                // BUYER WILL GET PRIMARY COIN AMOUNT
+                $this->CI->WsServer_model->get_credit_balance_new($selltrade->user_id, $secondary_coin_id, $seller_receiving_amount_after_fees);
+            } else {
+
+                $this->_seller_trade_balance_update($selltrade->user_id, $primary_coin_id, $secondary_coin_id, $seller_will_pay, $seller_receiving_amount_after_fees);
+            }
 
 
             $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
-            $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
             $buyer_av_qty_after_trade = $this->DM->safe_minus([$buytrade->bid_qty_available, $trade_qty]);
             $seller_av_qty_after_trade = $this->DM->safe_minus([$selltrade->bid_qty_available, $trade_qty]);
 
@@ -241,15 +209,43 @@ class Sell extends Trade
 
             $buyupdate = array(
                 'bid_qty_available' => $buyer_av_qty_after_trade,
-                'amount_available' => $buyer_av_bid_amount_after_trade, //Balance added buy account
+                'amount_available' => $buyer_av_bid_amount_after_trade,
+                'fees_amount' => $this->DM->safe_add([$buytrade->fees_amount, $buyerTotalFees]),
                 'status' =>  $is_buyer_qty_fulfilled  ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
             $sellupdate = array(
-                'bid_qty_available' => $seller_av_qty_after_trade, // ( $trade_qty - $selltrade->bid_qty_available  <= 0 ) ? 0 : $trade_qty - $selltrade->bid_qty_available  , //(($buytrade->bid_qty_available-$selltrade->bid_qty_available)<0)?0:$buytrade->bid_qty_available-$selltrade->bid_qty_available,
-                'amount_available' => $seller_av_bid_amount_after_trade, //  ((( $trade_qty - $selltrade->bid_qty_available  )<= 0) ? 0: $trade_qty - $selltrade->bid_qty_available ) * $selltrade->bid_price, //Balance added seller account
+                'bid_qty_available' => $seller_av_qty_after_trade,
+                'fees_amount' => $this->DM->safe_add([$selltrade->fees_amount, $sellerTotalFees]),
                 'status' => $is_seller_qty_fulfilled  ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
+
+
+            if ($selltrade->is_market) {
+                // BUYER MARKET
+                // 1. Update Average total Amount
+                // 2. Update Average Price
+
+                if ($this->DM->isGreaterThan($selltrade->price, 0)) {
+                    $tPrice = $this->DM->safe_add([$selltrade->price, $trade_price]);
+                    $averagePrice = $this->DM->safe_division([$tPrice, 2]);
+                } else {
+                    $averagePrice = $trade_price;
+                }
+
+                if ($this->DM->isGreaterThan($buytrade->price, 0)) {
+                    $tAmount = $this->DM->safe_add([$selltrade->total_amount, $trade_amount]);
+                    $averageTotalAmount = $this->DM->safe_division([$tAmount, 2]);
+                } else {
+                    $averageTotalAmount = $trade_amount;
+                }
+
+                $sellupdate['total_amount'] = $averageTotalAmount;
+                $sellupdate['price'] = $averagePrice;
+            } else {
+                $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
+                $sellupdate['amount_available'] = $seller_av_bid_amount_after_trade;
+            }
 
             // DASH_USD
             $success_datetime = date('Y-m-d H:i:s');
@@ -265,7 +261,7 @@ class Sell extends Trade
                 'coinpair_id' => $coinpair_id,
                 'success_time' => $success_datetime,
                 'fees_amount' => $sellerTotalFees,
-                'available_amount' => $seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
+                'available_amount' => $selltrade->is_market ? 0 : $seller_av_bid_amount_after_trade, // $seller_available_bid_amount_after_trade,
                 'status' => $is_seller_qty_fulfilled ? PopulousWSSConstants::BID_COMPLETE_STATUS : PopulousWSSConstants::BID_PENDING_STATUS,
             );
 
@@ -277,11 +273,9 @@ class Sell extends Trade
 
             $log_id = $this->CI->WsServer_model->insert_order_log($selltraderlog);
 
-            // UPDATE SL Order
-            $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+            // Update SL orders and OHLCV
+            $this->after_successful_trade($coinpair_id,  $trade_price, $trade_qty, $success_datetimestamp);
 
-            // Updating Current minute OHLCV
-            $this->CI->WsServer_model->update_current_minute_OHLCV($coinpair_id, $trade_price, $trade_qty, $success_datetimestamp);
 
             log_message('debug', '--------DO SELL END--------');
 
@@ -375,39 +369,14 @@ class Sell extends Trade
         }
 
         $primary_coin_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
-        $secondary_coin_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
-
-        // $price = $this->_convert_to_decimals($price);
-        // $qty = $this->_convert_to_decimals($qty);
-
-        // $totalAmount = $this->_safe_math(" $price * $qty ");
         $totalAmount = $this->DM->safe_multiplication([$price, $qty]);
-
-
-        $totalFees = $this->_calculateTotalFeesAmount($price, $qty, $coinpair_id, 'SELL');
 
         $balance_primary = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->user_id);
 
-        // if ($this->_safe_math_condition_check(" $balance_primary->balance >= $qty ")) {
+        // Check balance
         if ($this->DM->isGreaterThanOrEqual($balance_primary->balance, $qty)) {
 
-            $open_date = date('Y-m-d H:i:s');
-
-            $tdata['TRADES'] = (object) $tadata = array(
-                'bid_type' => 'SELL',
-                'bid_price' => $price,
-                'bid_qty' => $qty,
-                'bid_qty_available' => $qty,
-                'total_amount' => $totalAmount,
-                'amount_available' => $totalAmount,
-                'coinpair_id' => $coinpair_id,
-                'user_id' => $this->user_id,
-                'open_order' => $open_date,
-                'fees_amount' => $totalFees,
-                'status' => BID_PENDING_STATUS,
-            );
-
-            $last_id = $this->CI->WsServer_model->insert_order($tadata);
+            $last_id = $this->create_limit_order('SELL', $qty, $price, $coinpair_id, $this->user_id);
 
             if ($last_id) {
 
@@ -417,8 +386,16 @@ class Sell extends Trade
                 log_message('debug', 'Price : ' . $price);
                 log_message('debug', 'Qty : ' . $qty);
                 log_message('debug', 'Total Amount : ' . $totalAmount);
-                log_message('debug', 'Total Fees : ' . $totalFees);
 
+
+                // Event for order creator
+                $this->wss_server->_event_push(
+                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
+                    [
+                        'order_id' => $last_id,
+                        'user_id' => $this->user_id,
+                    ]
+                );
                 // Transaction start
                 $this->DB->trans_start();
                 try {
@@ -431,27 +408,10 @@ class Sell extends Trade
 
                     log_message("debug", "End : Seller Hold balance ");
 
+                    $exchangeType = $this->CI->WsServer_model->get_exchange_type_by_coinpair_id($coinpair_id);
+                    log_message("debug", "Exchange to use : " . $exchangeType);
 
-                    $buyers = $this->CI->WsServer_model->get_buyers($price, $coinpair_id);
-                    // var_dump($buyers);
-                    if ($buyers) {
-
-                        log_message('debug', 'Buyers found');
-
-
-                        foreach ($buyers as $key => $buytrade) {
-
-                            // Provide updated sell trade here
-                            $selltrade = $this->CI->WsServer_model->get_order($last_id);
-
-                            // SELLING TO BUYER
-                            $this->_do_sell_trade($selltrade, $buytrade);
-
-                            // Updating SL buy order status and make them available if price changed
-                            // $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
-
-                        } // End of buytradequery Loop
-                    } else {
+                    if ($exchangeType == 'BINANCE') {
                         // No buyer found in Popex
                         // Find out on Binance
                         log_message('debug', '-------------BEGIN BINANCE----------------------------');
@@ -464,7 +424,35 @@ class Sell extends Trade
                             log_message('debug', 'Could not execute');
                         }
                         log_message('debug', '--------------ENDING BINANCE---------------------------');
+                    } else if ($exchangeType == 'POPEX') {
+
+                        log_message('debug', '-------------BEGIN POPEX----------------------------');
+                        $buyers = $this->CI->WsServer_model->get_buyers($coinpair_id, $price);
+                        // var_dump($buyers);
+                        if ($buyers) {
+
+                            log_message('debug', 'Popex Buyers found');
+
+                            foreach ($buyers as $key => $buytrade) {
+
+                                // Provide updated sell trade here
+                                $selltrade = $this->CI->WsServer_model->get_order($last_id);
+
+                                // SELLING TO BUYER
+                                $this->_do_sell_trade($selltrade, $buytrade);
+
+                                // Updating SL buy order status and make them available if price changed
+                                // $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+
+                            } // End of buytradequery Loop
+
+                        } else {
+                            log_message('debug', 'Popex Buyers not found');
+                        }
+                        log_message('debug', '--------------ENDING POPEX---------------------------');
                     }
+
+
 
                     // Transaction end
                     $this->DB->trans_complete();
@@ -542,6 +530,7 @@ class Sell extends Trade
             }
         } else {
 
+            log_message('debug', 'Insufficient balance.');
             $data['isSuccess'] = false;
             $data['message'] = 'Insufficient balance.';
             return $data;
@@ -625,7 +614,7 @@ class Sell extends Trade
         // Updating SL buy order status and make them available if price changed
         // $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
 
-        $buyers = $this->CI->WsServer_model->get_buyers($last_price, $coinpair_id);
+        $buyers = $this->CI->WsServer_model->get_buyers($coinpair_id);
         $remaining_qty = $qty;
 
         foreach ($buyers as $key => $buytrade) {
@@ -789,6 +778,7 @@ class Sell extends Trade
                         log_message('debug', 'Could not execute');
                     }
                     log_message('debug', '--------------ENDING BINANCE---------------------------');
+
 
                     // Transaction end
                     $this->DB->trans_complete();
