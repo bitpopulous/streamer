@@ -223,8 +223,8 @@ class Buy extends Trade
                 // 1. Update Average total Amount
                 // 2. Update Average Price
 
-                if ($this->DM->isGreaterThan($buytrade->price, 0)) {
-                    $tPrice = $this->DM->safe_add([$buytrade->price, $trade_price]);
+                if ($this->DM->isGreaterThan($buytrade->bid_price, 0)) {
+                    $tPrice = $this->DM->safe_add([$buytrade->bid_price, $trade_price]);
                     $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                 } else {
                     $averagePrice = $trade_price;
@@ -238,7 +238,7 @@ class Buy extends Trade
                 }
 
                 $buyupdate['total_amount'] = $averageTotalAmount;
-                $buyupdate['price'] = $averagePrice;
+                $buyupdate['bid_price'] = $averagePrice;
             } else {
                 $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
                 $buyupdate['amount_available'] = $buyer_av_bid_amount_after_trade;

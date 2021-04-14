@@ -226,8 +226,8 @@ class Sell extends Trade
                 // 1. Update Average total Amount
                 // 2. Update Average Price
 
-                if ($this->DM->isGreaterThan($selltrade->price, 0)) {
-                    $tPrice = $this->DM->safe_add([$selltrade->price, $trade_price]);
+                if ($this->DM->isGreaterThan($selltrade->bid_price, 0)) {
+                    $tPrice = $this->DM->safe_add([$selltrade->bid_price, $trade_price]);
                     $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                 } else {
                     $averagePrice = $trade_price;
@@ -241,7 +241,7 @@ class Sell extends Trade
                 }
 
                 $sellupdate['total_amount'] = $averageTotalAmount;
-                $sellupdate['price'] = $averagePrice;
+                $sellupdate['bid_price'] = $averagePrice;
             } else {
                 $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
                 $sellupdate['amount_available'] = $seller_av_bid_amount_after_trade;
