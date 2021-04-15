@@ -204,6 +204,15 @@ class Buy extends Trade
             $is_seller_qty_fulfilled = $this->DM->isZero($seller_qty_fulfilled);
 
 
+            log_message("debug", "seller_av_bid_amount_after_trade : " . $seller_av_bid_amount_after_trade);
+            log_message("debug", "buyer_av_qty_after_trade : " . $buyer_av_qty_after_trade);
+            log_message("debug", "seller_av_qty_after_trade : " . $seller_av_qty_after_trade);
+            log_message("debug", "buyer_qty_fulfilled : " . $buyer_qty_fulfilled);
+            log_message("debug", "seller_qty_fulfilled : " . $seller_qty_fulfilled);
+            log_message("debug", "is_buyer_qty_fulfilled : " . $is_buyer_qty_fulfilled ? 'True' : 'False');
+            log_message("debug", "is_seller_qty_fulfilled : " . $is_seller_qty_fulfilled ? 'True' : 'False');
+
+
             $buyupdate = array(
                 'bid_qty_available' => $buyer_av_qty_after_trade,
                 'fees_amount' => $this->DM->safe_add([$buytrade->fees_amount, $buyerTotalFees]),
@@ -279,35 +288,11 @@ class Buy extends Trade
              */
 
             try {
-                // EVENTS for both party
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $buytrade->id,
-                        'user_id' => $buytrade->user_id,
-                    ]
-                );
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $selltrade->id,
-                        'user_id' => $selltrade->user_id,
-                    ]
-                );
 
-                // EVENT for single trade
-
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_TRADE_CREATED,
-                    [
-                        'log_id' => $log_id,
-                    ]
-                );
-
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                    []
-                );
+                $this->event_order_updated($buytrade->id, $buytrade->user_id);
+                $this->event_order_updated($selltrade->id, $selltrade->user_id);
+                $this->event_trade_created($log_id);
+                $this->event_market_summary();
             } catch (\Exception $e) {
             }
 
@@ -626,19 +611,13 @@ class Buy extends Trade
                 // $totalAmount = $this->_safe_math(" $selltrade->bid_price * $max_buy_qty ");
                 $totalAmount = $this->DM->safe_multiplication([$selltrade->bid_price, $max_buy_qty]);
 
-                /**
-                 * 
-                 * Calculate fees
-                 */
-                // $totalFees = $this->_calculateTotalFeesAmount($selltrade->bid_price, $max_buy_qty, $coinpair_id, 'BUY');
-
-
                 // Transaction start
                 $this->DB->trans_start();
                 try {
                     $buytrade = $this->CI->WsServer_model->get_order($last_id);
 
                     $this->_do_buy_trade($buytrade, $selltrade);
+
 
                     // Transaction end
                     $this->DB->trans_complete();
@@ -671,56 +650,50 @@ class Buy extends Trade
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 }
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $last_id,
-                        'user_id' => $this->user_id,
-                    ]
-                );
 
-                // Event for order creator
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $last_id,
-                        'user_id' => $this->user_id,
-                    ]
-                );
+                $this->event_order_updated($last_id, $this->user_id);
+                $this->event_order_updated($selltrade->id, $selltrade->user_id);
+                $this->event_coinpair_updated($coinpair_id);
 
 
-                // $remaining_qty = $this->_safe_math(" $remaining_qty - $max_buy_qty ");
                 $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_buy_qty]);
 
-                // if ($this->_safe_math_condition_check(" $remaining_qty <= 0 ")) {
                 if ($this->DM->isZeroOrNegative($remaining_qty)) {
                     // ALL QTY BOUGHT
                     break; // Come out of for loop everything is bought
                 }
 
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                    [
-                        'coin_id' => $coinpair_id,
-                    ]
-                );
-
                 // Updating SL sell orders status and make them available if price changed
                 $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
             } // Sellers loop ends
 
+            $this->event_order_updated($last_id, $this->user_id);
+            $this->event_coinpair_updated($coinpair_id);
+
+
             // Create new order if qty remained
             if ($this->DM->isGreaterThan($remaining_qty, 0)) {
 
+                log_message('debug', "**********************************");
+                log_message('debug', "SELF BUY CANCELLATION");
+                log_message('debug', "Cancelling Remaining qty " . $remaining_qty);
+
+                // Cancel the order if, qty is still remaining
+                $buyupdate = ['status' => PopulousWSSConstants::BID_CANCELLED_STATUS];
+                $this->CI->WsServer_model->update_order($last_id, $buyupdate);
+
                 $data['message'] = "Could not buy remaining $remaining_qty Qty.";
+                log_message('debug', "**********************************");
+
+                $this->event_order_updated($last_id, $this->user_id);
+                $this->event_coinpair_updated($coinpair_id);
+
                 return $data;
             } else {
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                    [
-                        'coin_id' => $coinpair_id,
-                    ]
-                );
+
+                $this->event_order_updated($last_id, $this->user_id);
+                $this->event_coinpair_updated($coinpair_id);
+
                 $data['isSuccess'] = true;
                 $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
                     ' bought successfully';

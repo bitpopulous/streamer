@@ -1879,4 +1879,53 @@ class Trade
 
         return $result;
     }
+
+
+    /**
+     * 
+     * ALL EVENTS
+     * 
+     */
+
+    public function event_order_updated($_orderId, $_userId)
+    {
+        $this->wss_server->_event_push(
+            PopulousWSSConstants::EVENT_ORDER_UPDATED,
+            [
+                'order_id' => $_orderId,
+                'user_id' => $_userId,
+            ]
+        );
+    }
+
+
+    public function event_trade_created($_logId)
+    {
+        // EVENT for single trade
+        $this->wss_server->_event_push(
+            PopulousWSSConstants::EVENT_TRADE_CREATED,
+            [
+                'log_id' => $_logId,
+            ]
+        );
+    }
+
+    public function event_market_summary()
+    {
+        $this->wss_server->_event_push(
+            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
+            []
+        );
+    }
+
+    public function event_coinpair_updated($coinpair_id)
+    {
+
+        $this->wss_server->_event_push(
+            PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
+            [
+                'coin_id' => $coinpair_id,
+            ]
+        );
+    }
 }
