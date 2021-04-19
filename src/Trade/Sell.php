@@ -551,8 +551,6 @@ class Sell extends Trade
         $balance_prime = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $this->user_id);
         $available_prim_balance = $balance_prime->balance;
 
-
-        // if ($this->_safe_math_condition_check(" $available_prim_balance  <= 0 ")) {
         if ($this->DM->isZeroOrNegative($available_prim_balance) && $this->DM->isGreaterThanOrEqual($available_prim_balance, $qty) == false) {
 
             $data['isSuccess'] = false;
@@ -660,19 +658,17 @@ class Sell extends Trade
             if ($this->DM->isGreaterThan($remaining_qty, 0)) {
 
                 log_message('debug', "**********************************");
-                log_message('debug', "SELF SELL CANCELLATION");
-                log_message('debug', "Cancelling Remaining qty " . $remaining_qty);
+                log_message('debug', "SELL FAILURE because of NO LIQUDITY");
+                log_message('debug', "Failed Remaining qty " . $remaining_qty);
                 // Cancel the order if, qty is still remaining
-                $sellupdate = ['status' => PopulousWSSConstants::BID_CANCELLED_STATUS];
+                $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
                 $this->CI->WsServer_model->update_order($last_id, $sellupdate);
 
-                $data['message'] = "Could not buy remaining $remaining_qty Qty.";
+                $data['message'] = "Could not sell remaining $remaining_qty Qty.";
                 log_message('debug', "**********************************");
 
                 $this->event_order_updated($last_id, $this->user_id);
                 $this->event_coinpair_updated($coinpair_id);
-
-                return $data;
             } else {
                 $this->event_order_updated($last_id, $this->user_id);
                 $this->event_coinpair_updated($coinpair_id);
@@ -682,8 +678,9 @@ class Sell extends Trade
                 $data['isSuccess'] = true;
                 $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
                     ' bought successfully';
-                return $data;
             }
+
+            return $data;
 
             log_message('debug', '-------------ENDING POPEX----------------------------');
         }

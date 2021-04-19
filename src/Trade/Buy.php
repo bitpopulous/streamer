@@ -586,6 +586,7 @@ class Buy extends Trade
 
             // $totalAmount = $this->_safe_math(" $last_price * $qty ");
             $totalAmount = $this->DM->safe_multiplication([$last_price, $qty]);
+            $remaining_qty = $qty;
 
 
             // if ($this->_safe_math_condition_check(" $balance_sec->balance  < $totalAmount ")) {
@@ -596,35 +597,46 @@ class Buy extends Trade
 
                 $data['isSuccess'] = false;
                 $data['message'] = "Maximum $maximumBuy $primary_coin_symbol you can buy @ price $last_price.";
-                return $data;
-            }
+            } else {
+
+                $sellers = $this->CI->WsServer_model->get_sellers($coinpair_id); // No price need to provide for Market buyers
+
+                foreach ($sellers as $selltrade) {
+
+                    // $max_buy_qty = $this->_safe_math(" LEAST( $selltrade->bid_qty_available, $remaining_qty ) ");
+                    $max_buy_qty = $this->DM->smallest($selltrade->bid_qty_available, $remaining_qty);
+
+                    // $totalAmount = $this->_safe_math(" $selltrade->bid_price * $max_buy_qty ");
+                    $totalAmount = $this->DM->safe_multiplication([$selltrade->bid_price, $max_buy_qty]);
+
+                    // Transaction start
+                    $this->DB->trans_start();
+                    try {
+                        $buytrade = $this->CI->WsServer_model->get_order($last_id);
+
+                        $this->_do_buy_trade($buytrade, $selltrade);
 
 
-            $sellers = $this->CI->WsServer_model->get_sellers($coinpair_id); // No price need to provide for Market buyers
-            $remaining_qty = $qty;
+                        // Transaction end
+                        $this->DB->trans_complete();
 
-            foreach ($sellers as $selltrade) {
+                        $trans_status = $this->DB->trans_status();
 
-                // $max_buy_qty = $this->_safe_math(" LEAST( $selltrade->bid_qty_available, $remaining_qty ) ");
-                $max_buy_qty = $this->DM->smallest($selltrade->bid_qty_available, $remaining_qty);
+                        if ($trans_status == FALSE) {
+                            $this->DB->trans_rollback();
 
-                // $totalAmount = $this->_safe_math(" $selltrade->bid_price * $max_buy_qty ");
-                $totalAmount = $this->DM->safe_multiplication([$selltrade->bid_price, $max_buy_qty]);
+                            $tadata = array(
+                                'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                            );
+                            $this->CI->WsServer_model->update_order($last_id, $tadata);
 
-                // Transaction start
-                $this->DB->trans_start();
-                try {
-                    $buytrade = $this->CI->WsServer_model->get_order($last_id);
-
-                    $this->_do_buy_trade($buytrade, $selltrade);
-
-
-                    // Transaction end
-                    $this->DB->trans_complete();
-
-                    $trans_status = $this->DB->trans_status();
-
-                    if ($trans_status == FALSE) {
+                            $data['isSuccess'] = false;
+                            $data['message'] = 'Something went wrong.';
+                            return $data;
+                        } else {
+                            $this->DB->trans_commit();
+                        }
+                    } catch (\Exception $e) {
                         $this->DB->trans_rollback();
 
                         $tadata = array(
@@ -635,37 +647,26 @@ class Buy extends Trade
                         $data['isSuccess'] = false;
                         $data['message'] = 'Something went wrong.';
                         return $data;
-                    } else {
-                        $this->DB->trans_commit();
                     }
-                } catch (\Exception $e) {
-                    $this->DB->trans_rollback();
 
-                    $tadata = array(
-                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                    );
-                    $this->CI->WsServer_model->update_order($last_id, $tadata);
-
-                    $data['isSuccess'] = false;
-                    $data['message'] = 'Something went wrong.';
-                    return $data;
-                }
-
-                $this->event_order_updated($last_id, $this->user_id);
-                $this->event_order_updated($selltrade->id, $selltrade->user_id);
-                $this->event_coinpair_updated($coinpair_id);
+                    $this->event_order_updated($last_id, $this->user_id);
+                    $this->event_order_updated($selltrade->id, $selltrade->user_id);
+                    $this->event_coinpair_updated($coinpair_id);
 
 
-                $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_buy_qty]);
+                    $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_buy_qty]);
 
-                if ($this->DM->isZeroOrNegative($remaining_qty)) {
-                    // ALL QTY BOUGHT
-                    break; // Come out of for loop everything is bought
-                }
+                    if ($this->DM->isZeroOrNegative($remaining_qty)) {
+                        // ALL QTY BOUGHT
+                        break; // Come out of for loop everything is bought
+                    }
 
-                // Updating SL sell orders status and make them available if price changed
-                $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
-            } // Sellers loop ends
+                    // Updating SL sell orders status and make them available if price changed
+                    $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+                } // Sellers loop ends
+
+            }
+
 
             $this->event_order_updated($last_id, $this->user_id);
             $this->event_coinpair_updated($coinpair_id);
@@ -675,11 +676,11 @@ class Buy extends Trade
             if ($this->DM->isGreaterThan($remaining_qty, 0)) {
 
                 log_message('debug', "**********************************");
-                log_message('debug', "SELF BUY CANCELLATION");
-                log_message('debug', "Cancelling Remaining qty " . $remaining_qty);
+                log_message('debug', "BUY FAILURE because of NO LIQUDITY");
+                log_message('debug', "Failed Remaining qty " . $remaining_qty);
 
                 // Cancel the order if, qty is still remaining
-                $buyupdate = ['status' => PopulousWSSConstants::BID_CANCELLED_STATUS];
+                $buyupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
                 $this->CI->WsServer_model->update_order($last_id, $buyupdate);
 
                 $data['message'] = "Could not buy remaining $remaining_qty Qty.";
@@ -687,8 +688,6 @@ class Buy extends Trade
 
                 $this->event_order_updated($last_id, $this->user_id);
                 $this->event_coinpair_updated($coinpair_id);
-
-                return $data;
             } else {
 
                 $this->event_order_updated($last_id, $this->user_id);
@@ -697,8 +696,9 @@ class Buy extends Trade
                 $data['isSuccess'] = true;
                 $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
                     ' bought successfully';
-                return $data;
             }
+
+            return $data;
             log_message('debug', '-------------ENDING POPEX----------------------------');
         }
     }

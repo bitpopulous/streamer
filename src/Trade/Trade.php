@@ -428,6 +428,7 @@ class Trade
             $data['message'] = 'Order is not pending';
         } else {
 
+
             $canceltrade = array(
                 'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
             );
@@ -473,13 +474,19 @@ class Trade
 
                 $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
 
-                log_message('debug', '----- Crediting balance -----');
+                if (!$orderdata->is_market) {
+                    // We don't hold amount/qty for the market order
+                    // No credit back
 
-                $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
-                // Release hold balance
+                    log_message('debug', '----- Crediting balance -----');
+                    $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                    // Release hold balance
 
-                log_message('debug', '----- Releasing Hold balance -----');
-                $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                    log_message('debug', '----- Releasing Hold balance -----');
+                    $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                } else {
+                    log_message('debug', '--- IT IS A MARKET ORDER : NO HOLD, NO RELEASE ---');
+                }
 
                 $traderlog = array(
                     'bid_id' => $orderdata->id,
