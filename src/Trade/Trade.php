@@ -730,8 +730,8 @@ class Trade
                     // BUYER WILL GET PRIMARY COIN AMOUNT
                     $this->CI->WsServer_model->get_credit_balance_new($buytrade->user_id, $primary_coin_id, $buyer_receiving_amount_after_fees);
 
-                    if ($this->DM->isGreaterThan($buytrade->price, 0)) {
-                        $tPrice = $this->DM->safe_add([$buytrade->price, $_price]);
+                    if ($this->DM->isGreaterThan($buytrade->bid_price, 0)) {
+                        $tPrice = $this->DM->safe_add([$buytrade->bid_price, $_price]);
                         $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                     } else {
                         $averagePrice = $_price;
@@ -1022,8 +1022,8 @@ class Trade
                         $this->CI->WsServer_model->get_debit_balance_new($selltrade->user_id, $primary_coin_id, $_qty);
                         $this->CI->WsServer_model->get_credit_balance_new($selltrade->user_id, $secondary_coin_id, $seller_receiving_amount_after_fees);
 
-                        if ($this->DM->isGreaterThan($selltrade->price, 0)) {
-                            $tPrice = $this->DM->safe_add([$selltrade->price, $_price]);
+                        if ($this->DM->isGreaterThan($selltrade->bid_price, 0)) {
+                            $tPrice = $this->DM->safe_add([$selltrade->bid_price, $_price]);
                             $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                         } else {
                             $averagePrice = $_price;
@@ -1477,8 +1477,8 @@ class Trade
                 // 1. Update Average total Amount
                 // 2. Update Average Price
 
-                if ($this->DM->isGreaterThan($buytrade->price, 0)) {
-                    $tPrice = $this->DM->safe_add([$buytrade->price, $price]);
+                if ($this->DM->isGreaterThan($buytrade->bid_price, 0)) {
+                    $tPrice = $this->DM->safe_add([$buytrade->bid_price, $price]);
                     $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                 } else {
                     $averagePrice = $price;
@@ -1585,7 +1585,7 @@ class Trade
                 $referralCommission = $this->DM->safe_division([$sellerTotalFees, $referralCommissionPercentRate]);
                 log_message("debug", "Referral Commission : " . $referralCommission);
 
-                $adminGetsAfterCommission = $this->DM->safe_minus([$buyerTotalFees, $referralCommission]);
+                $adminGetsAfterCommission = $this->DM->safe_minus([$sellerTotalFees, $referralCommission]);
 
                 // REFERRAL USER
                 $this->_referral_user_balance_update($sellerReferralUserId, $secondary_coin_id, $referralCommission);
@@ -1600,7 +1600,7 @@ class Trade
 
                 $this->CI->WsServer_model->credit_admin_fees_by_coin_id($secondary_coin_id, $sellerTotalFees);
                 // Add Admin Balance Log
-                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryCoinBalanceDetail->id, $this->admin_id, $secondary_coin_id, $buyerTotalFees, 0);
+                $this->CI->WsServer_model->addBalanceLog(BALANCE_LOG_TYPE_TRADE_FEES_CREDIT, $adminSecondaryCoinBalanceDetail->id, $this->admin_id, $secondary_coin_id, $sellerTotalFees, 0);
             }
 
 
@@ -1622,14 +1622,14 @@ class Trade
                 // 1. Update Average total Amount
                 // 2. Update Average Price
 
-                if ($this->DM->isGreaterThan($selltrade->price, 0)) {
-                    $tPrice = $this->DM->safe_add([$selltrade->price, $price]);
+                if ($this->DM->isGreaterThan($selltrade->bid_price, 0)) {
+                    $tPrice = $this->DM->safe_add([$selltrade->bid_price, $price]);
                     $averagePrice = $this->DM->safe_division([$tPrice, 2]);
                 } else {
                     $averagePrice = $price;
                 }
 
-                if ($this->DM->isGreaterThan($buytrade->price, 0)) {
+                if ($this->DM->isGreaterThan($selltrade->total_amount, 0)) {
                     $tAmount = $this->DM->safe_add([$selltrade->total_amount, $trade_amount]);
                     $averageTotalAmount = $this->DM->safe_division([$tAmount, 2]);
                 } else {
