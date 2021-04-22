@@ -504,19 +504,8 @@ class Trade
 
                 $this->CI->WsServer_model->insert_order_log($traderlog);
 
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $order_id,
-                        'user_id' => $user_id,
-                    ]
-                );
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                    [
-                        'coin_id' => $orderdata->coinpair_id,
-                    ]
-                );
+                $this->event_order_updated($order_id, $user_id);
+                $this->event_coinpair_updated($orderdata->coinpair_id);
 
                 $data['isSuccess'] = true;
                 $data['message'] = 'Request cancelled successfully.';
@@ -544,7 +533,7 @@ class Trade
 
         if (!$this->exchanges['BINANCE']->isSymbolSupported($binanceSupportedSymbol)) {
             log_message("debug", "Binance Not supported symbol $binanceSupportedSymbol");
-            return;
+            return false;
         }
 
 
@@ -570,7 +559,7 @@ class Trade
 
         if ($binanceOrderDetail == null) {
             log_message("debug", "No response from Binance");
-            return;
+            return false;
         }
         // Binance responded
         log_message("debug", "BINANCE RESPONDED");
@@ -693,27 +682,10 @@ class Trade
                 try {
                     // Update SL orders and OHLCV
                     $this->after_successful_trade($buytrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
-                    // EVENT for BUY party
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                        [
-                            'order_id' => $buytrade->id,
-                            'user_id' => $buytrade->user_id,
-                        ]
-                    );
 
-                    // EVENT for single trade
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_TRADE_CREATED,
-                        [
-                            'log_id' => $log_id,
-                        ]
-                    );
-
-                    $this->wss_server->_event_push(
-                        PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                        []
-                    );
+                    $this->event_order_updated($buytrade->id, $this->user_id);
+                    $this->event_trade_created($log_id);
+                    $this->event_market_summary();
                 } catch (\Exception $e) {
                 }
             } else if ($type == 'MARKET') {
@@ -805,27 +777,10 @@ class Trade
                     try {
                         // Update SL orders and OHLCV
                         $this->after_successful_trade($buytrade->coinpair_id,  $_price, $_qty, $success_datetimestamp);
-                        // EVENT for BUY party
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                            [
-                                'order_id' => $buytrade->id,
-                                'user_id' => $buytrade->user_id,
-                            ]
-                        );
 
-                        // EVENT for single trade
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_TRADE_CREATED,
-                            [
-                                'log_id' => $log_id,
-                            ]
-                        );
-
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                            []
-                        );
+                        $this->event_order_updated($buytrade->id, $buytrade->user_id);
+                        $this->event_trade_created($log_id);
+                        $this->event_market_summary();
                     } catch (\Exception $e) {
                     }
                 }
@@ -1020,27 +975,10 @@ class Trade
                     try {
                         // Update SL orders and OHLCV
                         $this->after_successful_trade($selltrade->coinpair_id,  $price, $completeQty, $success_datetimestamp);
-                        // EVENT for BUY party
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                            [
-                                'order_id' => $selltrade->id,
-                                'user_id' => $selltrade->user_id,
-                            ]
-                        );
 
-                        // EVENT for single trade
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_TRADE_CREATED,
-                            [
-                                'log_id' => $log_id,
-                            ]
-                        );
-
-                        $this->wss_server->_event_push(
-                            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                            []
-                        );
+                        $this->event_order_updated($selltrade->id, $selltrade->user_id);
+                        $this->event_trade_created($log_id);
+                        $this->event_market_summary();
                     } catch (\Exception $e) {
                     }
                 } else if ($type == 'MARKET') {
@@ -1135,27 +1073,9 @@ class Trade
                         try {
                             // Update SL orders and OHLCV
                             $this->after_successful_trade($selltrade->coinpair_id,  $_price, $_qty, $success_datetimestamp);
-                            // EVENT for BUY party
-                            $this->wss_server->_event_push(
-                                PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                                [
-                                    'order_id' => $selltrade->id,
-                                    'user_id' => $selltrade->user_id,
-                                ]
-                            );
-
-                            // EVENT for single trade
-                            $this->wss_server->_event_push(
-                                PopulousWSSConstants::EVENT_TRADE_CREATED,
-                                [
-                                    'log_id' => $log_id,
-                                ]
-                            );
-
-                            $this->wss_server->_event_push(
-                                PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                                []
-                            );
+                            $this->event_order_updated($selltrade->id, $selltrade->user_id);
+                            $this->event_trade_created($log_id);
+                            $this->event_market_summary();
                         } catch (\Exception $e) {
                         }
                     }
@@ -1414,19 +1334,8 @@ class Trade
 
                             $this->CI->WsServer_model->insert_order_log($traderlog);
 
-                            $this->wss_server->_event_push(
-                                PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                                [
-                                    'order_id' => $order_id,
-                                    'user_id' => $user_id,
-                                ]
-                            );
-                            $this->wss_server->_event_push(
-                                PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                                [
-                                    'coin_id' => $orderdata->coinpair_id,
-                                ]
-                            );
+                            $this->event_order_updated($order_id, $user_id);
+                            $this->event_coinpair_updated($orderdata->coinpair_id);
 
                             $data['isSuccess'] = true;
                             $data['message'] = 'Request cancelled successfully.';
@@ -1784,30 +1693,14 @@ class Trade
          */
 
         try {
-            // EVENTS for both party
-            $this->wss_server->_event_push(
-                PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                [
-                    'order_id' => $tradeDetail['id'],
-                    'user_id' => $tradeDetail['user_id'],
-                ]
-            );
+
+            $this->event_order_updated($tradeDetail['id'], $tradeDetail['user_id']);
 
             if ($log_id != null) {
-
-                // EVENT for single trade
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_TRADE_CREATED,
-                    [
-                        'log_id' => $log_id,
-                    ]
-                );
+                $this->event_trade_created($log_id);
             }
 
-            $this->wss_server->_event_push(
-                PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-                []
-            );
+            $this->event_market_summary();
         } catch (\Exception $e) {
         }
     }
