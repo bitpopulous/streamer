@@ -372,15 +372,7 @@ class Sell extends Trade
                 log_message('debug', 'Qty : ' . $qty);
                 log_message('debug', 'Total Amount : ' . $totalAmount);
 
-
-                // Event for order creator
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $last_id,
-                        'user_id' => $this->user_id,
-                    ]
-                );
+                $this->event_order_updated($last_id, $this->user_id);
                 // Transaction start
                 $this->DB->trans_start();
                 try {
@@ -407,6 +399,7 @@ class Sell extends Trade
                             log_message('debug', 'Trade executed :)');
                         } else {
                             log_message('debug', 'Could not execute');
+                            throw new \Exception("Could not executed");
                         }
                         log_message('debug', '--------------ENDING BINANCE---------------------------');
                     } else if ($exchangeType == 'POPEX') {
@@ -438,7 +431,6 @@ class Sell extends Trade
                     }
 
 
-
                     // Transaction end
                     $this->DB->trans_complete();
 
@@ -451,53 +443,39 @@ class Sell extends Trade
                             'status' => PopulousWSSConstants::BID_FAILED_STATUS,
                         );
                         $this->CI->WsServer_model->update_order($last_id, $tadata);
+                        $this->event_order_updated($last_id, $this->user_id);
 
                         $data['isSuccess'] = false;
                         $data['message'] = 'Something went wrong.';
                         return $data;
                     } else {
                         $this->DB->trans_commit();
+
+                        $this->event_order_updated($last_id, $this->user_id);
+                        $this->event_coinpair_updated($coinpair_id);
+
+                        $data['isSuccess'] = true;
+                        $data['message'] = 'Sell order successfully placed.';
+
+                        log_message('debug', '===========SELL ORDER FINISHED===========');
+
+                        return $data;
                     }
                 } catch (\Exception $e) {
                     $this->DB->trans_rollback();
 
                     log_message('debug', '===========SELL ORDER FAILED===========');
 
-
                     $tadata = array(
                         'status' => PopulousWSSConstants::BID_FAILED_STATUS,
                     );
                     $this->CI->WsServer_model->update_order($last_id, $tadata);
+                    $this->event_order_updated($last_id, $this->user_id);
 
                     $data['isSuccess'] = false;
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 }
-
-                log_message('debug', '===========SELL ORDER FINISHED===========');
-
-                // Event for order creator
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                    [
-                        'order_id' => $last_id,
-                        'user_id' => $this->user_id,
-                    ]
-                );
-
-                // Send event to every client
-                $this->wss_server->_event_push(
-                    PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-                    [
-                        'coin_id' => $coinpair_id,
-                    ]
-                );
-
-
-                $data['isSuccess'] = true;
-                $data['message'] = 'Sell order successfully placed.';
-
-                return $data;
             } else {
 
                 $data['isSuccess'] = false;
@@ -576,44 +554,60 @@ class Sell extends Trade
         log_message('debug', 'Exchange Type');
         log_message('debug', strtoupper($exchangeType));
 
+        try {
 
-        if ($exchangeType == 'BINANCE') {
-            log_message('debug', '-------------BEGIN BINANCE----------------------------');
+            if ($exchangeType == 'BINANCE') {
+                log_message('debug', '-------------BEGIN BINANCE----------------------------');
 
-            $binanceExecuted = $this->binance_sell_trade($coin_details, $selltrade, 'MARKET', $selltrade->id);
-            if ($binanceExecuted === true) {
-                log_message('debug', 'Trade executed :)');
-            } else {
-                log_message('debug', 'Could not execute');
-            }
+                $binanceExecuted = $this->binance_sell_trade($coin_details, $selltrade, 'MARKET', $selltrade->id);
+                if ($binanceExecuted === true) {
+                    log_message('debug', 'Trade executed :)');
+                } else {
+                    log_message('debug', 'Could not execute');
+                    throw new \Exception("Could not executed");
+                }
 
-            log_message('debug', '--------------ENDING BINANCE---------------------------');
-        } else if ($exchangeType == 'POPEX') {
+                log_message('debug', '--------------ENDING BINANCE---------------------------');
+            } else if ($exchangeType == 'POPEX') {
 
-            log_message('debug', '-------------BEGIN POPEX----------------------------');
+                log_message('debug', '-------------BEGIN POPEX----------------------------');
 
-            $buyers = $this->CI->WsServer_model->get_buyers($coinpair_id);
-            $remaining_qty = $qty;
+                $buyers = $this->CI->WsServer_model->get_buyers($coinpair_id);
+                $remaining_qty = $qty;
 
-            foreach ($buyers as $buytrade) {
+                foreach ($buyers as $buytrade) {
 
-                $max_sell_qty = $this->DM->smallest($buytrade->bid_qty_available, $remaining_qty);
+                    $max_sell_qty = $this->DM->smallest($buytrade->bid_qty_available, $remaining_qty);
 
-                // Transaction start
-                $this->DB->trans_start();
-                try {
-                    $selltrade = $this->CI->WsServer_model->get_order($last_id);
+                    // Transaction start
+                    $this->DB->trans_start();
+                    try {
+                        $selltrade = $this->CI->WsServer_model->get_order($last_id);
 
-                    // SELLING TO BUYER
-                    $this->_do_sell_trade($selltrade, $buytrade);
+                        // SELLING TO BUYER
+                        $this->_do_sell_trade($selltrade, $buytrade);
 
 
-                    // Transaction end
-                    $this->DB->trans_complete();
+                        // Transaction end
+                        $this->DB->trans_complete();
 
-                    $trans_status = $this->DB->trans_status();
+                        $trans_status = $this->DB->trans_status();
 
-                    if ($trans_status == FALSE) {
+                        if ($trans_status == FALSE) {
+                            $this->DB->trans_rollback();
+
+                            $tadata = array(
+                                'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+                            );
+                            $this->CI->WsServer_model->update_order($last_id, $tadata);
+
+                            $data['isSuccess'] = false;
+                            $data['message'] = 'Something went wrong.';
+                            return $data;
+                        } else {
+                            $this->DB->trans_commit();
+                        }
+                    } catch (\Exception $e) {
                         $this->DB->trans_rollback();
 
                         $tadata = array(
@@ -624,65 +618,62 @@ class Sell extends Trade
                         $data['isSuccess'] = false;
                         $data['message'] = 'Something went wrong.';
                         return $data;
-                    } else {
-                        $this->DB->trans_commit();
                     }
-                } catch (\Exception $e) {
-                    $this->DB->trans_rollback();
 
-                    $tadata = array(
-                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                    );
-                    $this->CI->WsServer_model->update_order($last_id, $tadata);
+                    $this->event_order_updated($last_id, $this->user_id);
+                    $this->event_order_updated($buytrade->id, $buytrade->user_id);
+                    $this->event_coinpair_updated($coinpair_id);
 
-                    $data['isSuccess'] = false;
-                    $data['message'] = 'Something went wrong.';
-                    return $data;
+                    $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_sell_qty]);
+
+                    if ($this->DM->isZeroOrNegative($remaining_qty)) {
+                        // ALL QTY SOLD
+                        break; // Come out of for loop everything is sold
+                    }
                 }
 
-                $this->event_order_updated($last_id, $this->user_id);
-                $this->event_order_updated($buytrade->id, $buytrade->user_id);
-                $this->event_coinpair_updated($coinpair_id);
 
-                $remaining_qty = $this->DM->safe_minus([$remaining_qty, $max_sell_qty]);
 
-                if ($this->DM->isZeroOrNegative($remaining_qty)) {
-                    // ALL QTY SOLD
-                    break; // Come out of for loop everything is sold
+                // if ($this->_safe_math_condition_check("$remaining_qty > 0 ")) {
+                if ($this->DM->isGreaterThan($remaining_qty, 0)) {
+
+                    log_message('debug', "**********************************");
+                    log_message('debug', "SELL FAILURE because of NO LIQUDITY");
+                    log_message('debug', "Failed Remaining qty " . $remaining_qty);
+                    // Cancel the order if, qty is still remaining
+                    $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
+                    $this->CI->WsServer_model->update_order($last_id, $sellupdate);
+
+                    $data['message'] = "Could not sell remaining $remaining_qty Qty.";
+                    log_message('debug', "**********************************");
+
+                    $this->event_order_updated($last_id, $this->user_id);
+                    $this->event_coinpair_updated($coinpair_id);
+                } else {
+                    $this->event_order_updated($last_id, $this->user_id);
+                    $this->event_coinpair_updated($coinpair_id);
+
+                    // All quantity bought
+
+                    $data['isSuccess'] = true;
+                    $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
+                        ' bought successfully';
                 }
+
+
+                log_message('debug', '-------------ENDING POPEX----------------------------');
+                return $data;
             }
+        } catch (\Exception $e) {
+            $tadata = array(
+                'status' => PopulousWSSConstants::BID_FAILED_STATUS,
+            );
+            $this->CI->WsServer_model->update_order($last_id, $tadata);
+            $this->event_order_updated($last_id, $this->user_id);
 
-
-
-            // if ($this->_safe_math_condition_check("$remaining_qty > 0 ")) {
-            if ($this->DM->isGreaterThan($remaining_qty, 0)) {
-
-                log_message('debug', "**********************************");
-                log_message('debug', "SELL FAILURE because of NO LIQUDITY");
-                log_message('debug', "Failed Remaining qty " . $remaining_qty);
-                // Cancel the order if, qty is still remaining
-                $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
-                $this->CI->WsServer_model->update_order($last_id, $sellupdate);
-
-                $data['message'] = "Could not sell remaining $remaining_qty Qty.";
-                log_message('debug', "**********************************");
-
-                $this->event_order_updated($last_id, $this->user_id);
-                $this->event_coinpair_updated($coinpair_id);
-            } else {
-                $this->event_order_updated($last_id, $this->user_id);
-                $this->event_coinpair_updated($coinpair_id);
-
-                // All quantity bought
-
-                $data['isSuccess'] = true;
-                $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
-                    ' bought successfully';
-            }
-
+            $data['isSuccess'] = false;
+            $data['message'] = 'Something went wrong.';
             return $data;
-
-            log_message('debug', '-------------ENDING POPEX----------------------------');
         }
     }
 
@@ -796,14 +787,8 @@ class Sell extends Trade
         $last_id = $this->CI->WsServer_model->insert_order($tadata);
 
 
-        // Event for order creator
-        $this->wss_server->_event_push(
-            PopulousWSSConstants::EVENT_ORDER_UPDATED,
-            [
-                'order_id' => $last_id,
-                'user_id' => $this->user_id,
-            ]
-        );
+        $this->event_order_updated($last_id, $this->user_id);
+
 
         if ($last_id) {
             // Transaction start
@@ -824,40 +809,35 @@ class Sell extends Trade
                         'status' => PopulousWSSConstants::BID_FAILED_STATUS,
                     );
                     $this->CI->WsServer_model->update_order($last_id, $tadata);
+                    $this->event_order_updated($last_id, $this->user_id);
 
                     $data['isSuccess'] = false;
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 } else {
                     $this->DB->trans_commit();
+                    // Event for order creator
+                    // Event for order creator
+                    $this->event_order_updated($last_id, $this->user_id);
+
+
+                    $data['isSuccess'] = true;
+                    $data['message'] = 'Stop limit order has been placed';
+                    return $data;
                 }
-            } catch (Exception $e) {
+            } catch (\Exception $e) {
                 $this->DB->trans_rollback();
 
                 $tadata = array(
                     'status' => PopulousWSSConstants::BID_FAILED_STATUS,
                 );
                 $this->CI->WsServer_model->update_order($last_id, $tadata);
+                $this->event_order_updated($last_id, $this->user_id);
 
                 $data['isSuccess'] = false;
                 $data['message'] = 'Something went wrong.';
                 return $data;
             }
-
-            // Event for order creator
-            // Event for order creator
-            $this->wss_server->_event_push(
-                PopulousWSSConstants::EVENT_ORDER_UPDATED,
-                [
-                    'order_id' => $last_id,
-                    'user_id' => $this->user_id,
-                ]
-            );
-
-
-            $data['isSuccess'] = true;
-            $data['message'] = 'Stop limit order has been placed';
-            return $data;
         } else {
             $data['isSuccess'] = false;
             $data['message'] = 'Could not create order';
