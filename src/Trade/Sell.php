@@ -656,7 +656,7 @@ class Sell extends Trade
                     log_message('debug', "**********************************");
                     log_message('debug', "SELL FAILURE because of NO LIQUDITY");
                     log_message('debug', "Failed Remaining qty " . $remaining_qty);
-                    // Cancel the order if, qty is still remaining
+                    // Cancel the order if, qty is still remaining 
                     $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
                     $this->CI->WsServer_model->update_order($last_id, $sellupdate);
                     $data['msg_code'] = 'could_not_sell_remaining_qty';
