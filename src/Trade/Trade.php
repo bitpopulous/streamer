@@ -413,18 +413,22 @@ class Trade
         if ($orderdata == null) {
             log_message('debug', 'Order not found.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_not_found';
             $data['message'] = 'Order not found.';
         } else if ($orderdata->status == PopulousWSSConstants::BID_CANCELLED_STATUS) {
             log_message('debug', 'Order is already cancelled.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_is_already_cancelled';
             $data['message'] = 'Order is already cancelled';
         } else if ($user_id != $orderdata->user_id) {
             log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'you_are_not_allowed_to_cancel_this_order';
             $data['message'] = 'You are not allowed to cancel this order.';
         } else if ($orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
             log_message('debug', 'Order is not pending.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_is_not_pending';
             $data['message'] = 'Order is not pending';
         } else {
 
@@ -440,6 +444,7 @@ class Trade
                 log_message('debug', 'Something wrong while canceling order');
 
                 $data['isSuccess'] = false;
+                $data['msg_code'] = 'could_not_cancelled_the_order';
                 $data['message'] = 'Could not cancelled the order';
             } else {
                 $currency_symbol = '';
@@ -508,6 +513,7 @@ class Trade
                 $this->event_coinpair_updated($orderdata->coinpair_id);
 
                 $data['isSuccess'] = true;
+                $data['msg_code'] = 'request_cancelled_successfully';
                 $data['message'] = 'Request cancelled successfully.';
             }
         }
@@ -1201,18 +1207,22 @@ class Trade
         if ($orderdata == null) {
             log_message('debug', 'Order not found.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_not_found';
             $data['message'] = 'Order not found.';
         } else if ($orderdata->status == PopulousWSSConstants::BID_CANCELLED_STATUS) {
             log_message('debug', 'Order is already cancelled.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_is_already_cancelled';
             $data['message'] = 'Order is already cancelled';
         } else if ($user_id != $orderdata->user_id) {
             log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'you_are_not_allowed_to_cancel_this_order';
             $data['message'] = 'You are not allowed to cancel this order.';
         } else if ($orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
             log_message('debug', 'Order is not pending.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'order_is_not_pending';
             $data['message'] = 'Order is not pending';
         } else {
 
@@ -1226,6 +1236,7 @@ class Trade
             if ($popexBinanceOrderDetail['status'] == PopulousWSSConstants::EXTERNAL_ORDER_INACTIVE_STATUS) {
                 log_message("debug", "Order already unlinked with binance");
                 $data['isSuccess'] = true;
+                $data['msg_code'] = 'order_is_already_cancelled';
                 $data['message'] = 'Order is already cancelled';
             }
 
@@ -1255,6 +1266,7 @@ class Trade
                 if ($binanceRes == false) {
                     log_message('debug', 'Binance Respond false');
                     $data['isSuccess'] = false;
+                    $data['msg_code'] = 'could_not_cancel_order';
                     $data['message'] = 'Could not cancel Order';
                 } else {
                     log_message('debug', 'Binance Cancel response');
@@ -1276,6 +1288,7 @@ class Trade
                             log_message('debug', 'Something wrong while canceling order');
 
                             $data['isSuccess'] = false;
+                            $data['msg_code'] = 'could_not_cancelled_the_order';
                             $data['message'] = 'Could not cancel the order';
                         } else {
                             $currency_symbol = '';
@@ -1338,6 +1351,7 @@ class Trade
                             $this->event_coinpair_updated($orderdata->coinpair_id);
 
                             $data['isSuccess'] = true;
+                            $data['msg_code'] = 'request_cancelled_successfully';
                             $data['message'] = 'Request cancelled successfully.';
                         }
                     } else {
@@ -1345,6 +1359,7 @@ class Trade
                         log_message('debug', 'Something wrong while canceling binance order');
 
                         $data['isSuccess'] = false;
+                        $data['msg_code'] = 'could_not_cancel_the_binance_order';
                         $data['message'] = 'Could not cancel the binance order';
                     }
                 }
@@ -1365,6 +1380,7 @@ class Trade
 
                     $this->_binance_order_interal_update($primary_coin_id, $secondary_coin_id, $tradeDetail['bid_type'], $tradeDetail, $remainingQtyBefore, $tradeDetail['bid_price'], PopulousWSSConstants::BID_COMPLETE_STATUS, time());
                     $data['isSuccess'] = false;
+                    $data['msg_code'] = 'order_is_already_executed';
                     $data['message'] = 'Order is already executed';
                 } else if ($binanceOrderStatusDetail['status'] == BINANCE_ORDER_STATUS_CANCELED) {
 
@@ -1376,6 +1392,7 @@ class Trade
                     $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
 
                     $data['isSuccess'] = true;
+                    $data['msg_code'] = 'request_cancelled_successfully';
                     $data['message'] = 'Request cancelled successfully.';
                 }
             }
