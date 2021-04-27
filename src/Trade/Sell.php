@@ -322,6 +322,7 @@ class Sell extends Trade
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'user_could_not_found';
             $data['message'] = 'User could not found.';
             return $data;
         }
@@ -331,6 +332,7 @@ class Sell extends Trade
 
         if ($coin_details == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'invalid_pair';
             $data['message'] = 'Invalid pair';
             return $data;
         }
@@ -343,12 +345,14 @@ class Sell extends Trade
 
         if ($this->_validate_secondary_value_decimals($price, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_price_is_invalid';
             $data['message'] = 'Sell price invalid.';
             return $data;
         }
 
         if ($this->_validate_primary_value_decimals($qty, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_amount_is_invalid';
             $data['message'] = 'Sell amount invalid.';
             return $data;
         }
@@ -446,6 +450,7 @@ class Sell extends Trade
                         $this->event_order_updated($last_id, $this->user_id);
 
                         $data['isSuccess'] = false;
+                        $data['msg_code'] = 'something_went_wrong';
                         $data['message'] = 'Something went wrong.';
                         return $data;
                     } else {
@@ -455,6 +460,7 @@ class Sell extends Trade
                         $this->event_coinpair_updated($coinpair_id);
 
                         $data['isSuccess'] = true;
+                        $data['msg_code'] = 'sell_order_successfully_placed';
                         $data['message'] = 'Sell order successfully placed.';
 
                         log_message('debug', '===========SELL ORDER FINISHED===========');
@@ -473,12 +479,14 @@ class Sell extends Trade
                     $this->event_order_updated($last_id, $this->user_id);
 
                     $data['isSuccess'] = false;
+                    $data['msg_code'] = 'something_went_wrong';
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 }
             } else {
 
                 $data['isSuccess'] = false;
+                $data['msg_code'] = 'trade_could_not_submitted';
                 $data['message'] = 'Trade could not submitted.';
                 return $data;
             }
@@ -486,6 +494,7 @@ class Sell extends Trade
 
             log_message('debug', 'Insufficient balance.');
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'insufficient_balance';
             $data['message'] = 'Insufficient balance.';
             return $data;
         }
@@ -503,6 +512,7 @@ class Sell extends Trade
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'user_could_not_found';
             $data['message'] = 'User could not found.';
             return $data;
         }
@@ -510,12 +520,14 @@ class Sell extends Trade
         $coin_details = $this->CI->WsServer_model->get_coin_pair(intval($coinpair_id));
         if ($coin_details == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'invalid_pair';
             $data['message'] = 'Invalid pair';
             return $data;
         }
 
         if ($this->_validate_primary_value_decimals($qty, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_amount_is_invalid';
             $data['message'] = 'Sell amount invalid.';
             return $data;
         }
@@ -532,6 +544,7 @@ class Sell extends Trade
         if ($this->DM->isZeroOrNegative($available_prim_balance) && $this->DM->isGreaterThanOrEqual($available_prim_balance, $qty) == false) {
 
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'insufficient_balance';
             $data['message'] = 'Insufficient balance.';
             return $data;
         }
@@ -543,6 +556,7 @@ class Sell extends Trade
 
         if (!$last_id) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'could_not_submit_order';
             $data['message'] = 'Could not submit order';
             return $data;
         }
@@ -602,6 +616,7 @@ class Sell extends Trade
                             $this->CI->WsServer_model->update_order($last_id, $tadata);
 
                             $data['isSuccess'] = false;
+                            $data['msg_code'] = 'something_went_wrong';
                             $data['message'] = 'Something went wrong.';
                             return $data;
                         } else {
@@ -616,6 +631,7 @@ class Sell extends Trade
                         $this->CI->WsServer_model->update_order($last_id, $tadata);
 
                         $data['isSuccess'] = false;
+                        $data['msg_code'] = 'something_went_wrong';
                         $data['message'] = 'Something went wrong.';
                         return $data;
                     }
@@ -640,10 +656,11 @@ class Sell extends Trade
                     log_message('debug', "**********************************");
                     log_message('debug', "SELL FAILURE because of NO LIQUDITY");
                     log_message('debug', "Failed Remaining qty " . $remaining_qty);
-                    // Cancel the order if, qty is still remaining
+                    // Cancel the order if, qty is still remaining 
                     $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
                     $this->CI->WsServer_model->update_order($last_id, $sellupdate);
-
+                    $data['msg_code'] = 'could_not_sell_remaining_qty';
+                    $data['remaining_qty'] = $remaining_qty;
                     $data['message'] = "Could not sell remaining $remaining_qty Qty.";
                     log_message('debug', "**********************************");
 
@@ -656,6 +673,8 @@ class Sell extends Trade
                     // All quantity bought
 
                     $data['isSuccess'] = true;
+                    $data['msg_code'] = 'all_qty_bought_successfully';
+                    $data['all_qty'] = $this->_format_number($qty, $coin_details->primary_decimals);
                     $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
                         ' bought successfully';
                 }
@@ -672,6 +691,7 @@ class Sell extends Trade
             $this->event_order_updated($last_id, $this->user_id);
 
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'something_went_wrong';
             $data['message'] = 'Something went wrong.';
             return $data;
         }
@@ -689,6 +709,7 @@ class Sell extends Trade
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'user_could_not_found';
             $data['message'] = 'User could not found.';
             return $data;
         }
@@ -697,24 +718,28 @@ class Sell extends Trade
         $coin_details = $this->CI->WsServer_model->get_coin_pair($coinpair_id);
         if ($coin_details == null) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'invalid_pair';
             $data['message'] = 'Invalid pair';
             return $data;
         }
 
         if ($this->_validate_secondary_value_decimals($stop, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_stop_price_invalid';
             $data['message'] = 'Sell Stop price invalid.';
             return $data;
         }
 
         if ($this->_validate_secondary_value_decimals($limit, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_limit_price_invalid';
             $data['message'] = 'Sell Limit price invalid.';
             return $data;
         }
 
         if ($this->_validate_primary_value_decimals($qty, $coin_details->primary_decimals) == false) {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'sell_amount_is_invalid';
             $data['message'] = 'Sell amount invalid.';
             return $data;
         }
@@ -756,6 +781,7 @@ class Sell extends Trade
         if ($this->DM->isGreaterThan($qty, $balance_prim->balance)) {
 
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'you_have_insufficient_balance';
             $data['message'] = "You have insufficient balance.";
             return $data;
         }
@@ -812,6 +838,7 @@ class Sell extends Trade
                     $this->event_order_updated($last_id, $this->user_id);
 
                     $data['isSuccess'] = false;
+                    $data['msg_code'] = 'something_went_wrong';
                     $data['message'] = 'Something went wrong.';
                     return $data;
                 } else {
@@ -822,6 +849,7 @@ class Sell extends Trade
 
 
                     $data['isSuccess'] = true;
+                    $data['msg_code'] = 'stop_limit_order_has_been_placed';
                     $data['message'] = 'Stop limit order has been placed';
                     return $data;
                 }
@@ -835,11 +863,13 @@ class Sell extends Trade
                 $this->event_order_updated($last_id, $this->user_id);
 
                 $data['isSuccess'] = false;
+                $data['msg_code'] = 'something_went_wrong';
                 $data['message'] = 'Something went wrong.';
                 return $data;
             }
         } else {
             $data['isSuccess'] = false;
+            $data['msg_code'] = 'could_not_create_order';
             $data['message'] = 'Could not create order';
             return $data;
         }
