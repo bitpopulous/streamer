@@ -902,7 +902,7 @@ class Trade
                 log_message('info', "Create Linked record");
                 $linked = $this->CI->WsServer_model->createPopexBinanceOrderLink($selltrade->id, $binanceOrderDetail['orderId'], $binanceOrderDetail['clientOrderId'], $binanceOrderDetail['status']);
                 log_message('debug', $linked);
-                // Update order, when 
+                return true;
             } else if (
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_FILLED ||
                 $binanceOrderDetail['status'] == BINANCE_ORDER_STATUS_PARTIALLY_FILLED
