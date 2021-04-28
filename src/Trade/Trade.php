@@ -754,7 +754,7 @@ class Trade
                     $buyupdate = array(
                         'bid_qty_available' => $availableQty,
                         'fees_amount' => $this->DM->safe_add([$buytrade->fees_amount, $buyerTotalFees]),
-                        'price' => $averagePrice,
+                        'bid_price' => $averagePrice,
                         'total_amount' => $averageTotalAmount,
                         'status' =>   $tradeNewStatus,
                     );
@@ -1048,7 +1048,7 @@ class Trade
                         $sellupdate = array(
                             'bid_qty_available' => $availableQty,
                             'fees_amount' => $this->DM->safe_add([$selltrade->fees_amount, $sellerTotalFees]),
-                            'price' => $averagePrice,
+                            'bid_price' => $averagePrice,
                             'total_amount' => $averageTotalAmount,
                             'status' =>   $tradeNewStatus
                         );
@@ -1509,7 +1509,7 @@ class Trade
                 }
 
                 $buyupdate['total_amount'] = $averageTotalAmount;
-                $buyupdate['price'] = $averagePrice;
+                $buyupdate['bid_price'] = $averagePrice;
             } else {
                 $buyer_av_bid_amount_after_trade = $this->DM->safe_minus([$buytrade->amount_available, $trade_amount]);
                 log_message('debug', 'buyer_av_bid_amount_after_trade : ' . $buyer_av_bid_amount_after_trade);
@@ -1654,7 +1654,7 @@ class Trade
                 }
 
                 $sellupdate['total_amount'] = $averageTotalAmount;
-                $sellupdate['price'] = $averagePrice;
+                $sellupdate['bid_price'] = $averagePrice;
             } else {
                 $seller_av_bid_amount_after_trade = $this->DM->safe_minus([$selltrade->amount_available, $trade_amount]);
                 $sellupdate['amount_available'] = $seller_av_bid_amount_after_trade;
