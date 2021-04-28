@@ -29,7 +29,10 @@ class ExternalEvent extends ExternalChannel
             // $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBook($symbol);
             // $binanceOrderbook = $this->exchanges['BINANCE']->getOrderBookRes();
 
-            $orderBook = $this->CI->WsServer_model->merge_orderbook($orderBook['buy_orders'], $orderBook['sell_orders'],  $binanceOrderbook['bid'], $binanceOrderbook['ask']);
+            $popex_buyOrders    = $this->CI->WsServer_model->get_popex_orders_price_userId($coinpairId, 40, BID_PENDING_STATUS, 'BUY');
+            $popex_sellOrders   = $this->CI->WsServer_model->get_popex_orders_price_userId($coinpairId, 40, BID_PENDING_STATUS, 'SELL');
+
+            $orderBook = $this->CI->WsServer_model->merge_orderbook($popex_buyOrders, $popex_sellOrders,  $binanceOrderbook['bid'], $binanceOrderbook['ask']);
         }
 
 
