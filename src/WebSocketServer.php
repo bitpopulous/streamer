@@ -216,6 +216,7 @@ class WebSocketServer extends WssMain implements WebSocketServerContract
 
 
             if ($client_ip) {
+				$client_ip = (string) $client_ip;
                 $this->clientIps[] = $client_ip;
                 $this->clientIpWithTime[][$client_ip] = date('Y-m-d H:i:s');
 
