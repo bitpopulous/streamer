@@ -295,6 +295,7 @@ class Sell extends Trade
              */
 
             try {
+                $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
                 // EVENTS for both party
                 $this->event_order_updated($buytrade->id, $buytrade->user_id);
                 $this->event_order_updated($selltrade->id, $selltrade->user_id);
@@ -726,6 +727,17 @@ class Sell extends Trade
             return $data;
         }
 
+        $exchangeType = $this->CI->WsServer_model->get_exchange_type_by_coinpair_id($coinpair_id);
+        log_message("debug", "Exchange to use : " . $exchangeType);
+
+        if ($exchangeType != 'POPEX') {
+            $data['isSuccess'] = false;
+            $data['msg_code'] = 'no_sl_order_supported';
+            $data['message'] = 'Stop Limit order not supported';
+            return $data;
+        }
+
+
         if ($this->_validate_secondary_value_decimals($stop, $coin_details->secondary_decimals) == false) {
             $data['isSuccess'] = false;
             $data['msg_code'] = 'sell_stop_price_invalid';
@@ -789,40 +801,14 @@ class Sell extends Trade
             return $data;
         }
 
-        // $totalAmount = $this->_safe_math(" $limit * $qty ");
-        $totalAmount = $this->DM->safe_multiplication([$limit, $qty]);
 
-        $totalFees = $this->_calculateTotalFeesAmount($limit, $qty, $coinpair_id, 'SELL');
-
-
-        $tdata['TRADES'] = (object) $tadata = array(
-            'bid_type' => 'SELL',
-            'bid_price' => $limit,
-            'bid_price_stop' => $stop,
-            'bid_price_limit' => $limit,
-            'is_stop_limit' => 1,
-            'stop_condition' => $condition,
-            'bid_qty' => $qty,
-            'bid_qty_available' => $qty,
-            'total_amount' => $totalAmount,
-            'amount_available' => $totalAmount,
-            'coinpair_id' => $coinpair_id,
-            'user_id' => $this->user_id,
-            'open_order' => $open_date,
-            'fees_amount' => $totalFees,
-            'status' => PopulousWSSConstants::BID_QUEUED_STATUS,
-        );
-
-        $last_id = $this->CI->WsServer_model->insert_order($tadata);
-
-
-        $this->event_order_updated($last_id, $this->user_id);
+        $last_id = $this->create_sl_order('SELL', $qty, $condition, $limit, $stop, $coinpair_id, $this->user_id);
 
 
         if ($last_id) {
-            // Transaction start
-            $this->DB->trans_start();
             try {
+                // Transaction start
+                $this->DB->trans_start();
                 // BUYER : HOLD SECONDARY COIN
                 $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $primary_coin_id, $qty);
 
@@ -833,28 +819,16 @@ class Sell extends Trade
 
                 if ($trans_status == FALSE) {
                     $this->DB->trans_rollback();
-
-                    $tadata = array(
-                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                    );
-                    $this->CI->WsServer_model->update_order($last_id, $tadata);
-                    $this->event_order_updated($last_id, $this->user_id);
-
-                    $data['isSuccess'] = false;
-                    $data['msg_code'] = 'something_went_wrong';
-                    $data['message'] = 'Something went wrong.';
-                    return $data;
+                    throw new \Exception('something_went_wrong');
                 } else {
                     $this->DB->trans_commit();
                     // Event for order creator
-                    // Event for order creator
                     $this->event_order_updated($last_id, $this->user_id);
-
+                    $this->event_coinpair_updated($coinpair_id);
 
                     $data['isSuccess'] = true;
                     $data['msg_code'] = 'stop_limit_order_has_been_placed';
                     $data['message'] = 'Stop limit order has been placed';
-                    return $data;
                 }
             } catch (\Exception $e) {
                 $this->DB->trans_rollback();
@@ -868,13 +842,13 @@ class Sell extends Trade
                 $data['isSuccess'] = false;
                 $data['msg_code'] = 'something_went_wrong';
                 $data['message'] = 'Something went wrong.';
-                return $data;
             }
         } else {
             $data['isSuccess'] = false;
             $data['msg_code'] = 'could_not_create_order';
             $data['message'] = 'Could not create order';
-            return $data;
         }
+
+        return $data;
     }
 }

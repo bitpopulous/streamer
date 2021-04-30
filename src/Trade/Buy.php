@@ -289,6 +289,7 @@ class Buy extends Trade
 
             try {
 
+                $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
                 $this->event_order_updated($buytrade->id, $buytrade->user_id);
                 $this->event_order_updated($selltrade->id, $selltrade->user_id);
                 $this->event_trade_created($log_id);
@@ -741,6 +742,17 @@ class Buy extends Trade
             $data['message'] = 'Invalid pair';
             return $data;
         }
+
+
+        $exchangeType = $this->CI->WsServer_model->get_exchange_type_by_coinpair_id($coinpair_id);
+        log_message("debug", "Exchange to use : " . $exchangeType);
+
+        if ($exchangeType != 'POPEX') {
+            $data['isSuccess'] = false;
+            $data['msg_code'] = 'no_sl_order_supported';
+            $data['message'] = 'Stop Limit order not supported';
+            return $data;
+        }
         /**
          *
          * AMOUNT : PRIMARY
@@ -820,54 +832,8 @@ class Buy extends Trade
 
         $last_price = $this->CI->WsServer_model->get_last_trade_price($coinpair_id);
 
+        $last_id = $this->create_sl_order('BUY', $qty, $condition, $limit, $stop, $coinpair_id, $this->user_id);
 
-
-
-        // Transaction start
-        $this->DB->trans_start();
-        try {
-            $last_id = $this->create_sl_order('BUY', $qty, $condition, $limit, $stop, $coinpair_id, $this->user_id);
-
-            // Updating SL sell orders status and make them available if price changed
-            $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
-
-            // Transaction end
-            $this->DB->trans_complete();
-
-            $trans_status = $this->DB->trans_status();
-
-            if ($trans_status == FALSE) {
-                $this->DB->trans_rollback();
-
-                if ($last_id) {
-                    $tadata = array(
-                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                    );
-                    $this->CI->WsServer_model->update_order($last_id, $tadata);
-                }
-
-                $data['isSuccess'] = false;
-                $data['msg_code'] = 'something_went_wrong';
-                $data['message'] = 'Something went wrong.';
-                return $data;
-            } else {
-                $this->DB->trans_commit();
-            }
-        } catch (\Exception $e) {
-            $this->DB->trans_rollback();
-
-            if ($last_id) {
-                $tadata = array(
-                    'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                );
-                $this->CI->WsServer_model->update_order($last_id, $tadata);
-            }
-
-            $data['isSuccess'] = false;
-            $data['msg_code'] = 'something_went_wrong';
-            $data['message'] = 'Something went wrong.';
-            return $data;
-        }
         /**
          *
          * The stop price is simply the price that triggers a limit order, and the limit price is the specific price of the limit order that was triggered.
@@ -876,9 +842,9 @@ class Buy extends Trade
          */
 
         if ($last_id) {
-            // Transaction start
-            $this->DB->trans_start();
             try {
+                // Transaction start
+                $this->DB->trans_start();
                 // BUYER : HOLD SECONDARY COIN
                 $this->CI->WsServer_model->get_credit_hold_balance_from_balance($this->user_id, $secondary_coin_id, $totalAmount);
 
@@ -889,18 +855,17 @@ class Buy extends Trade
 
                 if ($trans_status == FALSE) {
                     $this->DB->trans_rollback();
-
-                    $tadata = array(
-                        'status' => PopulousWSSConstants::BID_FAILED_STATUS,
-                    );
-                    $this->CI->WsServer_model->update_order($last_id, $tadata);
-
-                    $data['isSuccess'] = false;
-                    $data['msg_code'] = 'something_went_wrong';
-                    $data['message'] = 'Something went wrong.';
-                    return $data;
+                    throw new \Exception('something_went_wrong');
                 } else {
                     $this->DB->trans_commit();
+
+                    $data['isSuccess'] = true;
+                    $data['msg_code'] = 'stop_limit_order_has_been_placed';
+                    $data['message'] = 'Stop limit order has been placed';
+
+                    $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
+                    $this->event_order_updated($last_id, $this->user_id);
+                    $this->event_coinpair_updated($coinpair_id);
                 }
             } catch (\Exception $e) {
                 $this->DB->trans_rollback();
@@ -913,20 +878,13 @@ class Buy extends Trade
                 $data['isSuccess'] = false;
                 $data['msg_code'] = 'something_went_wrong';
                 $data['message'] = 'Something went wrong.';
-                return $data;
             }
-
-            $this->event_order_updated($last_id, $this->user_id);
-
-            $data['isSuccess'] = true;
-            $data['msg_code'] = 'stop_limit_order_has_been_placed';
-            $data['message'] = 'Stop limit order has been placed';
-            return $data;
         } else {
             $data['isSuccess'] = false;
             $data['msg_code'] = 'could_not_create_order';
             $data['message'] = 'Could not create order';
-            return $data;
         }
+
+        return $data;
     }
 }
