@@ -425,7 +425,7 @@ class Trade
             $data['isSuccess'] = false;
             $data['msg_code'] = 'you_are_not_allowed_to_cancel_this_order';
             $data['message'] = 'You are not allowed to cancel this order.';
-        } else if ($orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
+        } else if ($orderdata->is_market == false &&  $orderdata->is_stop_limit == false && $orderdata->status != PopulousWSSConstants::BID_PENDING_STATUS) {
             log_message('debug', 'Order is not pending.');
             $data['isSuccess'] = false;
             $data['msg_code'] = 'order_is_not_pending';
