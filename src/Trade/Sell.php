@@ -662,7 +662,7 @@ class Sell extends Trade
                     $sellupdate = ['status' => PopulousWSSConstants::BID_FAILED_STATUS];
 
                     $this->CI->WsServer_model->update_order($last_id, $sellupdate);
-
+                    $data['isSuccess'] = false;
                     $data['msg_code'] = 'could_not_sell_remaining_qty';
                     $data['remaining_qty'] = $remaining_qty;
                     $data['message'] = "Could not sell remaining $remaining_qty Qty.";
