@@ -432,89 +432,108 @@ class Trade
             $data['message'] = 'Order is not pending';
         } else {
 
+            try {
+                $this->DB->trans_start();
 
-            $canceltrade = array(
-                'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
-            );
-
-            $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
-
-            if ($is_updated == false) {
-
-                log_message('debug', 'Something wrong while canceling order');
-
-                $data['isSuccess'] = false;
-                $data['msg_code'] = 'could_not_cancelled_the_order';
-                $data['message'] = 'Could not cancelled the order';
-            } else {
-                $currency_symbol = '';
-                $currency_id = '';
-                $coinpair_id = $orderdata->coinpair_id;
-
-                log_message('debug', 'Order Type : ' . $orderdata->bid_type);
-
-                $refund_amount = '';
-                if ($orderdata->bid_type == 'SELL') {
-                    $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
-                    $refund_amount = $orderdata->bid_qty_available;
-                } else {
-                    $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
-                    $refund_amount = $this->DM->safe_multiplication([$orderdata->bid_qty_available, $orderdata->bid_price]);
-                }
-
-                log_message('debug', 'Refund Amount : ' . $refund_amount);
-
-                $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
-                //User Financial Log
-                $tradecanceldata = array(
-                    'user_id' => $orderdata->user_id,
-                    'balance_id' => @$balance->id,
-                    'currency_id' => $currency_id,
-                    'transaction_type' => 'TRADE_CANCEL',
-                    'transaction_amount' => $refund_amount,
-                    'transaction_fees' => 0,
-                    'ip' => $ip_address,
-                    'date' => date('Y-m-d H:i:s'),
-                );
-
-                $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
-
-                if (!$orderdata->is_market) {
-                    // We don't hold amount/qty for the market order
-                    // No credit back
-
-                    log_message('debug', '----- Crediting balance -----');
-                    $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
-                    // Release hold balance
-
-                    log_message('debug', '----- Releasing Hold balance -----');
-                    $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
-                } else {
-                    log_message('debug', '--- IT IS A MARKET ORDER : NO HOLD, NO RELEASE ---');
-                }
-
-                $traderlog = array(
-                    'bid_id' => $orderdata->id,
-                    'bid_type' => $orderdata->bid_type,
-                    'complete_qty' => $orderdata->bid_qty_available,
-                    'bid_price' => $orderdata->bid_price,
-                    'complete_amount' => $refund_amount,
-                    'user_id' => $orderdata->user_id,
-                    'coinpair_id' => $orderdata->coinpair_id,
-                    'success_time' => date('Y-m-d H:i:s'),
-                    'fees_amount' => $orderdata->fees_amount,
-                    'available_amount' => $orderdata->amount_available,
+                $canceltrade = array(
                     'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
                 );
 
-                $this->CI->WsServer_model->insert_order_log($traderlog);
+                $is_updated = $this->CI->WsServer_model->update_order($order_id, $canceltrade);
 
-                $this->event_order_updated($order_id, $user_id);
-                $this->event_coinpair_updated($orderdata->coinpair_id);
+                if ($is_updated == false) {
 
-                $data['isSuccess'] = true;
-                $data['msg_code'] = 'request_cancelled_successfully';
-                $data['message'] = 'Request cancelled successfully.';
+                    log_message('debug', 'Something wrong while canceling order');
+
+                    $data['isSuccess'] = false;
+                    $data['msg_code'] = 'could_not_cancelled_the_order';
+                    $data['message'] = 'Could not cancelled the order';
+                    throw new \Exception("could_not_cancelled_the_order");
+                } else {
+                    $currency_symbol = '';
+                    $currency_id = '';
+                    $coinpair_id = $orderdata->coinpair_id;
+
+                    log_message('debug', 'Order Type : ' . $orderdata->bid_type);
+
+                    $refund_amount = '';
+                    if ($orderdata->bid_type == 'SELL') {
+                        $currency_id = $this->CI->WsServer_model->get_primary_id_by_coin_id($coinpair_id);
+                        $refund_amount = $orderdata->bid_qty_available;
+                    } else {
+                        $currency_id = $this->CI->WsServer_model->get_secondary_id_by_coin_id($coinpair_id);
+                        $refund_amount = $this->DM->safe_multiplication([$orderdata->bid_qty_available, $orderdata->bid_price]);
+                    }
+
+                    log_message('debug', 'Refund Amount : ' . $refund_amount);
+
+                    $balance = $this->CI->WsServer_model->get_user_balance_by_coin_id($currency_id, $orderdata->user_id);
+                    //User Financial Log
+                    $tradecanceldata = array(
+                        'user_id' => $orderdata->user_id,
+                        'balance_id' => @$balance->id,
+                        'currency_id' => $currency_id,
+                        'transaction_type' => 'TRADE_CANCEL',
+                        'transaction_amount' => $refund_amount,
+                        'transaction_fees' => 0,
+                        'ip' => $ip_address,
+                        'date' => date('Y-m-d H:i:s'),
+                    );
+
+                    $this->CI->WsServer_model->insert_balance_log($tradecanceldata);
+
+                    if (!$orderdata->is_market) {
+                        // We don't hold amount/qty for the market order
+                        // No credit back
+
+                        log_message('debug', '----- Crediting balance -----');
+                        $this->CI->WsServer_model->get_credit_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                        // Release hold balance
+
+                        log_message('debug', '----- Releasing Hold balance -----');
+                        $this->CI->WsServer_model->get_debit_hold_balance_new($orderdata->user_id, $currency_id, $refund_amount);
+                    } else {
+                        log_message('debug', '--- IT IS A MARKET ORDER : NO HOLD, NO RELEASE ---');
+                    }
+
+                    $traderlog = array(
+                        'bid_id' => $orderdata->id,
+                        'bid_type' => $orderdata->bid_type,
+                        'complete_qty' => $orderdata->bid_qty_available,
+                        'bid_price' => $orderdata->bid_price,
+                        'complete_amount' => $refund_amount,
+                        'user_id' => $orderdata->user_id,
+                        'coinpair_id' => $orderdata->coinpair_id,
+                        'success_time' => date('Y-m-d H:i:s'),
+                        'fees_amount' => $orderdata->fees_amount,
+                        'available_amount' => $orderdata->amount_available,
+                        'status' => PopulousWSSConstants::BID_CANCELLED_STATUS,
+                    );
+
+                    $this->CI->WsServer_model->insert_order_log($traderlog);
+
+                    $this->event_order_updated($order_id, $user_id);
+                    $this->event_coinpair_updated($orderdata->coinpair_id);
+
+                    $data['isSuccess'] = true;
+                    $orderdata = $this->CI->WsServer_model->get_order($order_id);
+                    $data['order'] = $orderdata;
+                    $data['msg_code'] = 'request_cancelled_successfully';
+                    $data['message'] = 'Request cancelled successfully.';
+                }
+
+
+                $this->DB->trans_complete();
+
+                $trans_status = $this->DB->trans_status();
+
+                if ($trans_status == FALSE) {
+                    $this->DB->trans_rollback();
+                } else {
+                    $this->DB->trans_commit();
+                }
+            } catch (\Exception $e) {
+                $this->DB->trans_rollback();
             }
         }
 
