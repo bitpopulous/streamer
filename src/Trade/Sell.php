@@ -122,10 +122,13 @@ class Sell extends Trade
 
                 $buyerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($primary_coin_id, $buyerReferralUserId);
 
-                $referralCommission = $this->DM->safe_division([$buyerTotalFees, $referralCommissionPercentRate]);
-                log_message("debug", "Referral Commission : " . $referralCommission);
+                $a1 = $this->DM->safe_multiplication([$referralCommissionPercentRate, $buyerTotalFees]);
+
+                $referralCommission = $this->DM->safe_division([$a1, 100]);
+                log_message("debug", "Buy Referral Commission : " . $referralCommission);
 
                 $adminGetsAfterCommission = $this->DM->safe_minus([$buyerTotalFees, $referralCommission]);
+                log_message("debug", "Buy Admin Commission : " . $adminGetsAfterCommission);
 
                 // REFERRAL USER
                 $this->_referral_user_balance_update($buyerReferralUserId, $primary_coin_id, $referralCommission);
@@ -153,10 +156,13 @@ class Sell extends Trade
 
                 $sellerReferralBalanceDetail = $this->CI->WsServer_model->get_user_balance_by_coin_id($secondary_coin_id, $sellerReferralUserId);
 
-                $referralCommission = $this->DM->safe_division([$sellerTotalFees, $referralCommissionPercentRate]);
-                log_message("debug", "Referral Commission : " . $referralCommission);
+                $a2 = $this->DM->safe_multiplication([$referralCommissionPercentRate, $sellerTotalFees]);
+
+                $referralCommission = $this->DM->safe_division([$a2, 100]);
+                log_message("debug", "Sell Referral Commission : " . $referralCommission);
 
                 $adminGetsAfterCommission = $this->DM->safe_minus([$sellerTotalFees, $referralCommission]);
+                log_message("debug", "Seller Admin commission  : " . $adminGetsAfterCommission);
 
 
                 // REFERRAL USER
