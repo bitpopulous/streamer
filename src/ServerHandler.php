@@ -7,9 +7,9 @@ use PopulousWSS\Events\ExternalEvent;
 use PopulousWSS\Events\PrivateEvent;
 use PopulousWSS\Events\PublicEvent;
 use PopulousWSS\ServerBaseHandler;
-use PopulousWSS\Trade\Trade;
-use PopulousWSS\Trade\Buy;
-use PopulousWSS\Trade\Sell;
+
+use PopulousWSS\Api\Populous;
+use PopulousWSS\Common\Auth;
 use WSSC\Contracts\ConnectionContract;
 
 class ServerHandler extends ServerBaseHandler
@@ -18,9 +18,13 @@ class ServerHandler extends ServerBaseHandler
     protected $private_event;
     protected $external_event;
 
+    protected $populousAPI;
+
     public $buy;
     public $sell;
     public $trade;
+
+    use Auth;
 
     public function __construct()
     {
@@ -28,13 +32,16 @@ class ServerHandler extends ServerBaseHandler
         $this->public_event = new PublicEvent($this);
         $this->private_event = new PrivateEvent($this);
         $this->external_event = new ExternalEvent($this);
-        $this->buy = new Buy($this);
-        $this->sell = new Sell($this);
-        $this->trade = new Trade($this);
+        $this->populousAPI = new Populous();
     }
 
     public function _event_handler(ConnectionContract $recv, string $channel, string $event, array $data)
     {
+        $this->log->debug('ONLY EVENT HANDLER');
+        $this->log->debug('Channel : ' . $channel);
+        $this->log->debug('Event : ' . $event);
+        $this->log->debug('Data : ' . json_encode($data));
+
         if ($this->_is_subscribe_required($event)) {
 
             if ($this->_is_private_channel($channel)) {
@@ -48,7 +55,28 @@ class ServerHandler extends ServerBaseHandler
 
             $_ip = explode(':', $recv->getPeerName())[0];
             $data['ip_address'] = $_ip;
-            $this->_reply_msg($recv, $event, $channel, $data);
+            return $this->_reply_msg($recv, $event, $channel, $data);
+        }
+    }
+
+    public function _api_event_handler($apiEvent, array $data)
+    {
+
+        $this->log->debug('Running : API EVENT HANDLER');
+        $this->log->debug('API EVENT : ' . $apiEvent);
+        $this->log->debug('data : ' . json_encode($data));
+
+        if ($apiEvent == PopulousWSSConstants::EVENT_ORDER_UPDATED) {
+
+            $order_id = $data['order_id'];
+            $user_id = $data['user_id'];
+            $this->private_event->_event_order_update($order_id, $user_id);
+        } else if ($apiEvent == PopulousWSSConstants::EVENT_COINPAIR_UPDATED) {
+            $this->public_event->_event_coinpair_update($data['coin_id']);
+        } else if ($apiEvent == PopulousWSSConstants::EVENT_TRADE_CREATED) {
+            $this->public_event->_event_trade_create($data['log_id']);
+        } else if ($apiEvent == PopulousWSSConstants::EVENT_MARKET_SUMMARY) {
+            $this->public_event->_event_24h_summary_update();
         }
     }
 
@@ -96,6 +124,12 @@ class ServerHandler extends ServerBaseHandler
     private function _reply_msg(ConnectionContract $recv, string $event, string $channel, array $rData)
     {
 
+
+        $this->log->debug("Replying Message .....");
+        $this->log->debug("Channel :" . $channel);
+        $this->log->debug("Event :" . $event);
+        $this->log->debug("Data :" . json_encode($rData));
+
         if ($event == 'orderbook-init') {
 
             $market = $rData['market'];
@@ -109,122 +143,155 @@ class ServerHandler extends ServerBaseHandler
             $this->send_safe($recv, json_encode($data_send));
         } else if ($event == 'exchange-buy') {
 
-            $coin_id = $rData['pair_id'];
-            $trade_type = $rData['trade_type'];
-            $auth = $rData['ua'];
+            $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($rData['pair_id']);
 
-            if ($trade_type == 'limit') {
+            $formData = [];
+            $formData['symbol'] = $symbol;
+            $formData['side'] = 'BUY';
+            $formData['type'] =  isset($rData['trade_type']) ? strtoupper($rData['trade_type']) : '';
+            $formData['price'] = isset($rData['price']) ? strtoupper($rData['price']) : '';
+            $formData['quantity'] = isset($rData['amount']) ? strtoupper($rData['amount']) : '';
+            $formData['stop'] = isset($rData['stop']) ? strtoupper($rData['stop']) : '';
+            $formData['limit'] = isset($rData['limit']) ? strtoupper($rData['limit']) : '';
+            $formData['user_id'] = $this->CI->WsServer_model->get_user_id_from_auth($rData['ua']);
 
-                $price = $rData['price'];
-                $amount = $rData['amount'];
+            // CALL POPULOUS API
+            $res = $this->populousAPI->order($formData);
+            $message = $this->populousAPI->getMessage();
+            $this->log->debug("Populous API Res Message :" . json_encode($message));
+            $data = $message->data;
 
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->buy->_limit($coin_id, $amount, $price, $auth),
-                ];
 
-                $this->send_safe($recv, json_encode($data_send));
-            } else if ($trade_type == 'market') {
-
-                $amount = $rData['amount'];
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->buy->_market($coin_id, $amount, $auth),
-                ];
-
-                $this->send_safe($recv, json_encode($data_send));
-            } else if ($trade_type == 'stop_limit') {
-
-                $amount = $rData['amount'];
-                $limit = $rData['limit'];
-                $stop = $rData['stop'];
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->buy->_stop_limit($coin_id, $amount, $stop, $limit, $auth),
-                ];
-
-                $this->send_safe($recv, json_encode($data_send));
+            $_d = [];
+            foreach ($data as $key => $val) {
+                if (in_array($key, ['isSuccess', 'message', 'msg_code', 'trade_type'])) {
+                    $_d[$key] = $val;
+                }
             }
+
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' => $_d,
+            ];
+            $this->send_safe($recv, json_encode($data_send));
+
+            if ($this->populousAPI->getStatus()) {
+                // Succeeded
+
+
+                $this->private_event->_event_order_update($data->order->id, $data->order->user_id);
+
+                if (isset($data->executed_seller_orders)) {
+
+                    foreach ($data->executed_seller_orders as $sellOrder) {
+                        $this->private_event->_event_order_update($sellOrder->id, $sellOrder->user_id);
+                    }
+                }
+                $this->public_event->_event_coinpair_update(intval($data->order->coinpair_id));
+            } else {
+                // Failed
+            }
+
+
+
             return;
         } else if ($event == 'exchange-sell') {
-            $coin_id = $rData['pair_id'];
-            $trade_type = $rData['trade_type'];
-            $auth = $rData['ua'];
 
-            if ($trade_type == 'limit') {
+            $symbol = $this->CI->WsServer_model->get_coin_symbol_by_coin_id($rData['pair_id']);
 
-                $price = $rData['price'];
-                $amount = $rData['amount'];
+            $formData = [];
+            $formData['symbol'] = $symbol;
+            $formData['side'] = 'SELL';
+            $formData['type'] =  isset($rData['trade_type']) ? strtoupper($rData['trade_type']) : '';
+            $formData['price'] = isset($rData['price']) ? strtoupper($rData['price']) : '';
+            $formData['quantity'] = isset($rData['amount']) ? strtoupper($rData['amount']) : '';
+            $formData['stop'] = isset($rData['stop']) ? strtoupper($rData['stop']) : '';
+            $formData['limit'] = isset($rData['limit']) ? strtoupper($rData['limit']) : '';
+            $formData['user_id'] = $this->CI->WsServer_model->get_user_id_from_auth($rData['ua']);
 
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->sell->_limit($coin_id, $amount, $price, $auth),
-                ];
+            // CALL POPULOUS API
+            $res = $this->populousAPI->order($formData);
+            $message = $this->populousAPI->getMessage();
+            $this->log->debug("Populous API Res Message:" . json_encode($message));
+            $data = $message->data;
 
-                $this->send_safe($recv, json_encode($data_send));
-            } else if ($trade_type == 'market') {
-
-                $amount = $rData['amount'];
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->sell->_market($coin_id, $amount, $auth),
-                ];
-
-                $this->send_safe($recv, json_encode($data_send));
-            } else if ($trade_type == 'stop_limit') {
-
-                $amount = $rData['amount'];
-                $limit = $rData['limit'];
-                $stop = $rData['stop'];
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->sell->_stop_limit($coin_id, $amount, $stop, $limit, $auth),
-                ];
-
-                $this->send_safe($recv, json_encode($data_send));
+            $_d = [];
+            foreach ($data as $key => $val) {
+                if (in_array($key, ['isSuccess', 'message', 'msg_code', 'trade_type'])) {
+                    $_d[$key] = $val;
+                }
             }
+
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' =>  $_d
+            ];
+            $this->send_safe($recv, json_encode($data_send));
+
+            if ($this->populousAPI->getStatus()) {
+                // Succeeded
+                $this->private_event->_event_order_update($data->order->id, $data->order->user_id);
+
+                if (isset($message->executed_buyer_orders)) {
+
+                    foreach ($message->executed_buyer_orders as $sellOrder) {
+                        $this->private_event->_event_order_update($sellOrder->id, $sellOrder->user_id);
+                    }
+                }
+                $this->public_event->_event_coinpair_update(intval($data->order->coinpair_id));
+            } else {
+                // Failed
+            }
+
             return;
         } else if ($event == 'exchange-cancel-order') {
 
             $order_id = $rData['order_id'];
             $auth = $rData['ua'];
 
-            // Checking if the order id is sent on external exchanges here, 
-            // If it is external order, need to send cancel event to the external exchange
 
-            $isBinance = $this->CI->WsServer_model->isBinanceOrder($order_id);
+            $formData = [];
+            $formData['order_id'] = $order_id;
+            $formData['user_id'] = $this->CI->WsServer_model->get_user_id_from_auth($rData['ua']);
 
-            log_message('debug', 'Order Id ' . $order_id);
+            // CALL POPULOUS API
+            $res = $this->populousAPI->cancel($formData);
+            $message = $this->populousAPI->getMessage();
+            $this->log->debug("Populous API Res Message:" . json_encode($message));
+            $data = $message->data;
 
-            if ($isBinance) {
-                log_message('debug', 'IT IS a binance Order ');
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->trade->binance_cancel_order($order_id, $auth, $rData)
-                ];
-                $this->send_safe($recv, json_encode($data_send));
-            } else {
-                log_message('debug', 'IT IS NOT a binance Order ');
-
-                $data_send = [
-                    'event' => $event,
-                    'channel' => $channel,
-                    'data' => $this->trade->cancel_order($order_id, $auth, $rData),
-                ];
-                $this->send_safe($recv, json_encode($data_send));
+            $_d = [];
+            foreach ($data as $key => $val) {
+                if (in_array($key, ['isSuccess', 'message', 'msg_code', 'trade_type'])) {
+                    $_d[$key] = $val;
+                }
             }
+
+            $data_send = [
+                'event' => $event,
+                'channel' => $channel,
+                'data' =>  $_d
+            ];
+            $this->send_safe($recv, json_encode($data_send));
+
+            if ($this->populousAPI->getStatus()) {
+                // Succeeded
+                $this->private_event->_event_order_update($data->order->id, $data->order->user_id);
+
+                if (isset($message->executed_buyer_orders)) {
+
+                    foreach ($message->executed_buyer_orders as $sellOrder) {
+                        $this->private_event->_event_order_update($sellOrder->id, $sellOrder->user_id);
+                    }
+                }
+                $this->public_event->_event_coinpair_update(intval($data->order->coinpair_id));
+            } else {
+                // Failed
+            }
+
+            return;
         } else if ($event == 'exchange-init') {
 
             $market = $rData['market'];

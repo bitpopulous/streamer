@@ -8,10 +8,12 @@ use PopulousWSS\Trade\Trade;
 
 class Buy extends Trade
 {
-    public function __construct(ServerHandler $server)
+
+    private $executedSellerOrders = [];
+
+    public function __construct($isInternal = false)
     {
-        parent::__construct($server);
-        $this->wss_server = $server;
+        parent::__construct(!$isInternal);
     }
 
     /**
@@ -26,6 +28,8 @@ class Buy extends Trade
             $buytrade->status == PopulousWSSConstants::BID_PENDING_STATUS
             && $selltrade->status == PopulousWSSConstants::BID_PENDING_STATUS
         ) {
+
+            $this->executedSellerOrders[] = $selltrade;
 
             log_message('info', '--------DO BUY START--------');
 
@@ -310,7 +314,7 @@ class Buy extends Trade
     /**
      * @return bool
      */
-    public function _limit($coinpair_id, $qty, $price, $auth): array
+    public function _limit($coinpair_id, $qty, $price, $user_id): array
     {
         $data = [
             'isSuccess' => true,
@@ -318,7 +322,7 @@ class Buy extends Trade
             'trade_type' => PopulousWSSConstants::TRADE_TYPE_LIMIT,
         ];
 
-        $this->user_id = $this->_get_user_id($auth);
+        $this->user_id = $user_id;
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
@@ -359,6 +363,7 @@ class Buy extends Trade
         if ($this->DM->isGreaterThanOrEqual($balance_secondary->balance, $totalAmount)) {
 
             $last_id  = $this->create_limit_order('BUY', $qty, $price, $coinpair_id, $this->user_id);
+            $data['order_id'] = $last_id;
 
             if ($last_id) {
 
@@ -450,6 +455,8 @@ class Buy extends Trade
                         $data['isSuccess'] = true;
                         $data['msg_code'] = 'buy_order_successfully_placed';
                         $data['message'] = 'Buy order successfully placed.';
+                        $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                        $data['executed_seller_orders'] = $this->executedSellerOrders;
 
                         return $data;
                     }
@@ -486,7 +493,7 @@ class Buy extends Trade
         }
     }
 
-    public function _market($coinpair_id, $qty, $auth): array
+    public function _market($coinpair_id, $qty, $user_id): array
     {
 
         $data = [
@@ -495,7 +502,7 @@ class Buy extends Trade
             'trade_type' => PopulousWSSConstants::TRADE_TYPE_MARKET,
         ];
 
-        $this->user_id = $this->_get_user_id($auth);
+        $this->user_id = $user_id;
 
         $coinpair_id = intval($coinpair_id);
 
@@ -700,6 +707,8 @@ class Buy extends Trade
                         $data['all_qty'] = $this->_format_number($qty, $coin_details->primary_decimals);
                         $data['msg_code'] = 'all_qty_bought_successfully';
                         $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) . ' bought successfully';
+                        $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                        $data['executed_seller_orders'] = $this->executedSellerOrders;
                     }
                 } catch (\Exception $e) {
                     $this->DB->trans_rollback();
@@ -723,7 +732,7 @@ class Buy extends Trade
         return $data;
     }
 
-    public function _stop_limit($coinpair_id, $qty, $stop, $limit, $auth): array
+    public function _stop_limit($coinpair_id, $qty, $stop, $limit, $user_id): array
     {
         $data = [
             'isSuccess' => true,
@@ -867,6 +876,8 @@ class Buy extends Trade
                     $data['isSuccess'] = true;
                     $data['msg_code'] = 'stop_limit_order_has_been_placed';
                     $data['message'] = 'Stop limit order has been placed';
+                    $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                    $data['executed_seller_orders'] = $this->executedSellerOrders;
 
                     $this->CI->WsServer_model->update_stop_limit_status($coinpair_id);
                     $this->event_order_updated($last_id, $this->user_id);

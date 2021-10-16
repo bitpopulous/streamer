@@ -25,10 +25,17 @@ class Trade
 
     protected $exchanges = [];
 
-    public function __construct(ServerHandler $server)
+    protected $broadcaster;
+
+    protected $broadcasterRequired = true;
+
+    public function __construct($isBroadcasterRequired = true)
     {
         $this->CI = &get_instance();
-        $this->wss_server = $server;
+
+        $this->broadcasterRequired = $isBroadcasterRequired;
+
+        // $this->wss_server = new ServerHandler();
 
         $this->CI->load->model([
             'WsServer_model',
@@ -36,11 +43,16 @@ class Trade
 
         $this->CI->load->library("PopDecimalMath", null, 'decimalmaths');
 
+        if ($this->broadcasterRequired) {
+            $this->CI->load->library('Broadcaster');
+            $this->broadcaster = $this->CI->broadcaster;
+        }
+
 
         $this->DM = &$this->CI->decimalmaths;
         $this->DB = $this->CI->db;
-        $this->exchanges['BINANCE'] = new Binance();
-        $this->exchanges['BINANCE']->loadExchangeInfo();
+        // $this->exchanges['BINANCE'] = new Binance();
+        // $this->exchanges['BINANCE']->loadExchangeInfo();
 
         $this->admin_id = getenv('ADMIN_USER_ID');
     }
@@ -396,11 +408,8 @@ class Trade
 
     // ORDER Related     
 
-    public function cancel_order($order_id, $auth, $rData)
+    public function cancel_order(string $order_id, string $user_id)
     {
-
-        $user_id = $this->_get_user_id($auth);
-        $ip_address = $rData['ip_address'];
 
         $data = [
             'isSuccess' => true,
@@ -421,7 +430,7 @@ class Trade
             $data['msg_code'] = 'order_is_already_cancelled';
             $data['message'] = 'Order is already cancelled';
         } else if ($user_id != $orderdata->user_id) {
-            log_message('debug', 'Order not related to this user. Auth Key ' . $auth);
+            log_message('debug', 'Not allowed ti cancel this order');
             $data['isSuccess'] = false;
             $data['msg_code'] = 'you_are_not_allowed_to_cancel_this_order';
             $data['message'] = 'You are not allowed to cancel this order.';
@@ -476,7 +485,7 @@ class Trade
                         'transaction_type' => 'TRADE_CANCEL',
                         'transaction_amount' => $refund_amount,
                         'transaction_fees' => 0,
-                        'ip' => $ip_address,
+                        'ip' => '',
                         'date' => date('Y-m-d H:i:s'),
                     );
 
@@ -1823,45 +1832,55 @@ class Trade
      * 
      */
 
+    public function broadcastEvents(array $eventsAndData = [])
+    {
+        if (!$this->broadcasterRequired) return;
+        log_message('debug', "....Broadcasting Events....");
+        log_message('debug', json_encode($eventsAndData));
+        foreach ($eventsAndData as $eventName => $eventData) {
+            $this->broadcaster->send(['event' => $eventName, 'data' => $eventData]);
+        }
+    }
+
     public function event_order_updated($_orderId, $_userId)
     {
-        $this->wss_server->_event_push(
-            PopulousWSSConstants::EVENT_ORDER_UPDATED,
-            [
-                'order_id' => $_orderId,
-                'user_id' => $_userId,
-            ]
-        );
+
+
+        $events = [];
+        $events["API-EVENT:" . PopulousWSSConstants::EVENT_ORDER_UPDATED] = [
+            'order_id' => $_orderId,
+            'user_id' => $_userId,
+        ];
+
+        $this->broadcastEvents($events);
     }
 
 
     public function event_trade_created($_logId)
     {
         // EVENT for single trade
-        $this->wss_server->_event_push(
-            PopulousWSSConstants::EVENT_TRADE_CREATED,
-            [
-                'log_id' => $_logId,
-            ]
-        );
+        $events = [];
+        $events["API-EVENT:" . PopulousWSSConstants::EVENT_TRADE_CREATED] = [
+            'log_id' => $_logId,
+        ];
+
+        $this->broadcastEvents($events);
     }
 
     public function event_market_summary()
     {
-        $this->wss_server->_event_push(
-            PopulousWSSConstants::EVENT_MARKET_SUMMARY,
-            []
-        );
+        $events = [];
+        $events["API-EVENT:" . PopulousWSSConstants::EVENT_MARKET_SUMMARY] = [];
+
+        $this->broadcastEvents($events);
     }
 
     public function event_coinpair_updated($coinpair_id)
     {
 
-        $this->wss_server->_event_push(
-            PopulousWSSConstants::EVENT_COINPAIR_UPDATED,
-            [
-                'coin_id' => $coinpair_id,
-            ]
-        );
+        $events = [];
+        $events["API-EVENT:" . PopulousWSSConstants::EVENT_COINPAIR_UPDATED] = ['coin_id' => $coinpair_id,];
+
+        $this->broadcastEvents($events);
     }
 }
