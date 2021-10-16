@@ -8,12 +8,12 @@ use PopulousWSS\Trade\Trade;
 
 class Sell extends Trade
 {
-    protected $wss_server;
+    private $executedBuyerOrders = [];
 
-    public function __construct(ServerHandler $server)
+
+    public function __construct($isInternal = false)
     {
-        parent::__construct($server);
-        $this->wss_server = $server;
+        parent::__construct(!$isInternal);
     }
 
     private function _do_sell_trade($selltrade, $buytrade)
@@ -26,6 +26,7 @@ class Sell extends Trade
 
             log_message('debug', '--------DO SELL START--------');
 
+            $this->executedBuyerOrders[] = $buytrade;
 
             $coinpair_id = intval($selltrade->coinpair_id);
             $symbol = $this->CI->WsServer_model->get_coinpair_symbol_of_coinpairId($coinpair_id);
@@ -125,10 +126,9 @@ class Sell extends Trade
                 $a1 = $this->DM->safe_multiplication([$referralCommissionPercentRate, $buyerTotalFees]);
 
                 $referralCommission = $this->DM->safe_division([$a1, 100]);
-                log_message("debug", "Buy Referral Commission : " . $referralCommission);
+                log_message("debug", "Referral Commission : " . $referralCommission);
 
                 $adminGetsAfterCommission = $this->DM->safe_minus([$buyerTotalFees, $referralCommission]);
-                log_message("debug", "Buy Admin Commission : " . $adminGetsAfterCommission);
 
                 // REFERRAL USER
                 $this->_referral_user_balance_update($buyerReferralUserId, $primary_coin_id, $referralCommission);
@@ -159,10 +159,9 @@ class Sell extends Trade
                 $a2 = $this->DM->safe_multiplication([$referralCommissionPercentRate, $sellerTotalFees]);
 
                 $referralCommission = $this->DM->safe_division([$a2, 100]);
-                log_message("debug", "Sell Referral Commission : " . $referralCommission);
+                log_message("debug", "Referral Commission : " . $referralCommission);
 
                 $adminGetsAfterCommission = $this->DM->safe_minus([$sellerTotalFees, $referralCommission]);
-                log_message("debug", "Seller Admin commission  : " . $adminGetsAfterCommission);
 
 
                 // REFERRAL USER
@@ -317,7 +316,7 @@ class Sell extends Trade
 
 
 
-    public function _limit($coinpair_id, $qty, $price, $auth): array
+    public function _limit($coinpair_id, $qty, $price, $user_id): array
     {
         $data = [
             'isSuccess' => true,
@@ -325,7 +324,7 @@ class Sell extends Trade
             'trade_type' => PopulousWSSConstants::TRADE_TYPE_LIMIT,
         ];
 
-        $this->user_id = $this->_get_user_id($auth);
+        $this->user_id = $user_id; //$this->_get_user_id($auth);
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
@@ -469,7 +468,8 @@ class Sell extends Trade
                         $data['isSuccess'] = true;
                         $data['msg_code'] = 'sell_order_successfully_placed';
                         $data['message'] = 'Sell order successfully placed.';
-
+                        $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                        $data['executed_buyer_orders'] = $this->executedBuyerOrders;
                         log_message('debug', '===========SELL ORDER FINISHED===========');
 
                         return $data;
@@ -507,7 +507,7 @@ class Sell extends Trade
         }
     }
 
-    public function _market($coinpair_id, $qty, $auth): array
+    public function _market($coinpair_id, $qty, $user_id): array
     {
         $data = [
             'isSuccess' => true,
@@ -515,7 +515,7 @@ class Sell extends Trade
             'trade_type' => PopulousWSSConstants::TRADE_TYPE_MARKET,
         ];
 
-        $this->user_id = $this->_get_user_id($auth);
+        $this->user_id = $user_id; //$this->_get_user_id($auth);
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
@@ -687,6 +687,8 @@ class Sell extends Trade
                     $data['all_qty'] = $this->_format_number($qty, $coin_details->primary_decimals);
                     $data['message'] = 'All ' . $this->_format_number($qty, $coin_details->primary_decimals) .
                         ' bought successfully';
+                    $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                    $data['executed_buyer_orders'] = $this->executedBuyerOrders;
                 }
             } catch (\Exception $e) {
                 $this->DB->trans_rollback();
@@ -707,7 +709,7 @@ class Sell extends Trade
         return $data;
     }
 
-    public function _stop_limit($coinpair_id, $qty, $stop, $limit, $auth): array
+    public function _stop_limit($coinpair_id, $qty, $stop, $limit, $user_id): array
     {
         $data = [
             'isSuccess' => true,
@@ -715,7 +717,7 @@ class Sell extends Trade
             'trade_type' => PopulousWSSConstants::TRADE_TYPE_STOP_LIMIT,
         ];
 
-        $this->user_id = $this->_get_user_id($auth);
+        $this->user_id = $user_id;
 
         if ($this->user_id == null) {
             $data['isSuccess'] = false;
@@ -835,6 +837,8 @@ class Sell extends Trade
                     $data['isSuccess'] = true;
                     $data['msg_code'] = 'stop_limit_order_has_been_placed';
                     $data['message'] = 'Stop limit order has been placed';
+                    $data['order'] = $this->CI->WsServer_model->get_order($last_id);
+                    $data['executed_buyer_orders'] = $this->executedBuyerOrders;
                 }
             } catch (\Exception $e) {
                 $this->DB->trans_rollback();

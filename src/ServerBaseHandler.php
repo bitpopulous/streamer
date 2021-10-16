@@ -48,20 +48,30 @@ class ServerBaseHandler extends WebSocket
 
     public function onMessage(ConnectionContract $recv, $msg)
     {
+        $this->log->debug("Message " . $msg);
         $_decoded_msg = json_decode($msg, true);
         if (is_array($_decoded_msg)) {
             // $this->log->debug($msg);
-            if (isset($_decoded_msg['event']) && isset($_decoded_msg['channel'])) {
-
-                $event = strtolower($_decoded_msg['event']);
-                $channel = strtolower($_decoded_msg['channel']);
+            if (isset($_decoded_msg['event'])) {
 
                 $data = [];
                 if (isset($_decoded_msg['data'])) {
                     $data = $_decoded_msg['data'];
                 }
 
-                $this->_event_handler($recv, $channel, $event, $data);
+                $event = strtolower($_decoded_msg['event']);
+                $isApiEvent = strpos($event, 'api-event:') === 0;
+
+                $this->log->debug('Is API Event ' . ($isApiEvent ? 'YES' : 'NO'));
+
+
+                if ($isApiEvent) {
+                    $eventExplode = explode(':', $event);
+                    $this->_api_event_handler($eventExplode[1], $data);
+                } else if (isset($_decoded_msg['channel'])) {
+                    $channel = strtolower($_decoded_msg['channel']);
+                    $this->_event_handler($recv, $channel, $event, $data);
+                }
             }
         } else {
             $this->log->debug($msg);
