@@ -35,8 +35,6 @@ class Trade
 
         $this->broadcasterRequired = $isBroadcasterRequired;
 
-        // $this->wss_server = new ServerHandler();
-
         $this->CI->load->model([
             'WsServer_model',
         ]);

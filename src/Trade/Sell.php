@@ -11,9 +11,9 @@ class Sell extends Trade
     private $executedBuyerOrders = [];
 
 
-    public function __construct($isInternal = false)
+    public function __construct($isBroadcasterRequired = false)
     {
-        parent::__construct(!$isInternal);
+        parent::__construct($isBroadcasterRequired);
     }
 
     private function _do_sell_trade($selltrade, $buytrade)
