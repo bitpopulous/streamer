@@ -11,9 +11,9 @@ class Buy extends Trade
 
     private $executedSellerOrders = [];
 
-    public function __construct($isInternal = false)
+    public function __construct($isBroadcasterRequired = false)
     {
-        parent::__construct(!$isInternal);
+        parent::__construct($isBroadcasterRequired);
     }
 
     /**

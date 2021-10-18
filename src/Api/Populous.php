@@ -31,14 +31,7 @@ class Populous
 		$ch = curl_init();
 
 		$_d = $params;
-		// $_d['_data'] = $params;
-
 		$postFields = http_build_query($_d);
-		// $postFields = $_d;
-
-		// $this->log->debug('Postfields : ' . $postFields);
-		// log_message('debug', 'Streamer => Postfields : ' . $postFields);
-
 		$ch = curl_init();
 
 		curl_setopt($ch, CURLOPT_URL, $url);
@@ -48,13 +41,12 @@ class Populous
 
 		$headers = array();
 		$headers[] = 'Content-Type: application/x-www-form-urlencoded';
-		$headers[] = 'api_key: ' . $this->apiKey;
-		$headers[] = 'secret_key: ' . $this->secretKey;
-		$headers[] = 'internal_call: populous';
+		$headers[] = HEADER_KEY_API_KEY . ': ' . $this->apiKey;
+		$headers[] = HEADER_KEY_SECRET_KEY . ': ' . $this->secretKey;
+		$headers[] = HEADER_KEY_INTERNAL_CALL . ': ' . HEADER_VAL_INTERNAL_CALL;
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
 		$result = curl_exec($ch);
-		log_message('debug', $result);
 		if (curl_errno($ch)) {
 			echo 'Error:' . curl_error($ch);
 		}
@@ -96,12 +88,12 @@ class Populous
 	public function order(array $formData = [])
 	{
 
-		return $this->_call($this->endpoint . '/userapi/order', $formData);
+		return $this->_call($this->endpoint . '/UserApi/order', $formData);
 	}
 
 	public function cancel(array $formData = [])
 	{
-		return $this->_call($this->endpoint . '/userapi/cancel', $formData);
+		return $this->_call($this->endpoint . '/UserApi/cancel', $formData);
 	}
 
 
